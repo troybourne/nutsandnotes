@@ -1,0 +1,92 @@
+ */
+
+
+const int numOfInputs = 4;     //number of inputs for buttons sensors
+const int numOfOutputs = 4;
+const int inputPins[numOfInputs] = {2, 3, 4, 5};  //array of input pin numbers
+const int relayPins[numOfOutputs] = {9, 10, 11, 12}; //array of output pins for relays
+bool inputState[numOfInputs] = {1, 1, 1, 1};   //variable to hold every state of every input
+int reading[numOfInputs];
+int lastInputState[numOfInputs] = {1, 1, 1, 1}; // variable that holds the last input state
+bool inputFlags[numOfInputs] = {LOW, LOW, LOW, LOW}; //input flag variable for each input
+int inputCounters[numOfInputs];  //this keeps a tally of each input change by input
+long lastActuateTime[numOfInputs] = {0, 0, 0, 0}; //last actuated buttonchange timestamp
+long debounceDelay = 50;   //the debounce delay time
+long longButtonPressTime = 2000;  //the time needed to activate a long button press
+long resetSketchLongPressTime = 6000; // hold for a sketch reset
+bool pressType[numOfInputs] = {0, 0, 0, 0}; //zero is short press and 1 is long press
+int currentCounterDisplay = 0;
+
+bool relayState[numOfOutputs]; //Global Array Uninitialized defaults to zero
+
+
+void setup()
+  {
+      for(int i = 0; i < numOfInputs; i++) 
+        {
+          pinMode(inputPins[i], INPUT_PULLUP);
+          digitalWrite(relayPins[i], HIGH);
+        }
+    Serial.begin(9600);
+}
+
+void loop()
+  {
+    setInputFlags();
+    resolveInputFlags();
+    resolveRelayPinOuts();
+  }
+
+void setInputFlags()
+
+  {
+      for(int i = 0; i < numOfInputs; i++) 
+        {
+          int reading = digitalRead(inputPins[i]);
+            if (reading != lastInputState[i])
+              {
+                  lastActuateTime[i] = millis();
+              }
+            if ((millis() - lastActuateTime[i] > debounceDelay))
+                {
+                    if(reading != inputState[i])
+                      {
+                          inputState[i] = reading;
+                        if(inputState[i] == HIGH)
+                          {
+                              inputFlags[i] = HIGH;
+                          }
+                      }
+                }
+          lastInputState[i] = reading;
+         }
+        /* for(int i = 0; i < numOfInputs; i++) 
+        {
+          Serial.print(i);
+          Serial.print("input shows inputState as : ");
+           Serial.print(inputState[i]);
+          Serial.print("       and inputFlag ");
+           Serial.print(i);
+           Serial.print(" as : ");
+          Serial.println(inputFlags[i]);
+        }*/
+    }
+
+void resolveInputFlags() 
+    {
+    for(int i = 0; i < numOfOutputs; i++) 
+        { 
+          if(inputFlags[i] == HIGH) 
+              { // Input Toggle Logic 
+            	relayState[i] = relayState[i] ^ 1;//xor with 1 toggles bit
+                digitalWrite(relayPins[i], relayState[i]); 
+                //printString(i);
+            Serial.print(relayState[i]);
+                inputFlags[i] = LOW; 
+              } 
+        } 
+    } 
+             
+void resolveRelayPinOuts(){
+     //Serial.println("resolveRelayPinouts was called");
+}
