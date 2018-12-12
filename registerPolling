@@ -1,0 +1,50 @@
+//outputs 2-6 feeding relay board 
+//inputs 8-13 sensors returning decimal from register binary readings which identify what button was pressed
+
+void setup()
+{
+  Serial.begin(9600);
+  delay(250);
+DDRD = DDRD | B11111100; //ddrb is 13-8, 1 is output 0 is input
+  //pinMode(13, OUTPUT);
+  //pinMode(12, OUTPUT);
+  //pinMode(11, OUTPUT);
+  //pinMode(10, OUTPUT);
+  //pinMode(9, OUTPUT);
+  //pinMode(8, OUTPUT);
+  PORTB = B01010100;
+  //digitalWrite(13, HIGH);
+  //digitalWrite(12, LOW);
+  //digitalWrite(11, HIGH);
+  //digitalWrite(10, HIGH);
+  //digitalWrite(9, LOW);
+  //digitalWrite(8, HIGH);
+  pinMode(13, INPUT_PULLUP);
+  pinMode(12, INPUT_PULLUP);
+  pinMode(11, INPUT_PULLUP);
+  pinMode(10, INPUT_PULLUP);
+  pinMode(9, INPUT_PULLUP);
+  pinMode(8, INPUT_PULLUP);
+  //digitalWrite(7, HIGH);
+  //digitalWrite(6, HIGH);
+  //digitalWrite(5, HIGH);
+  //digitalWrite(4, HIGH);
+  //digitalWrite(3, HIGH);
+  //digitalWrite(2, HIGH);
+  
+  
+ // DDRD = B11111100;
+  
+  PORTB = PORTB | B11111100;
+}
+
+void loop()
+{
+ int RDSens = PINB;
+  Serial.println(RDSens);
+  while(RDSens == 1){
+   digitalRead(PINB); 
+  }
+  Serial.println("something changed");
+  //delay(3000); // Delay a little bit to improve simulation performance
+}
