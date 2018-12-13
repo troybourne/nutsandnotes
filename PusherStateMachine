@@ -1,0 +1,135 @@
+// B is 8-13 inputs
+// D is 2-7 outputs
+/*NOTES
+ * the six NPN proximity sensors are in PORTB pins 8,9,10,11,12,13
+ * 8,9,10,11,12,13 correlate to binary values 32,16,8,4,2,1 respectively of PINB register 
+ * when no sensors are active PINB = 63
+ * states and actions were determined by reading PINB to decimal values and acting on the
+ * decimal values. if no sensors active = 63, then Least Sig Bit of pin 2 brings PINB to 62
+ * second least sig bit Pin 3 brings PINB to 61, if both are active its 60... etc
+ * pin 2 = 1 in binary, pin 3 = 2 or 0 in binary, pin 4 = 4 or 0 in binary, etc
+ * pins are ordered in line of use for pusher 2,3 = DROPPED sensors, 4,5 FULLY EXTENDED
+ * 6,7 PASSING ON RETRACTION FOR RAISE sensors
+ * also if 2 and 3 are HIGH (non activated) then Pusher is HOME
+ */
+#define VERIFY_PUSHER_STATE 0
+#define DROP_PUSHER 1
+#define EXTEND_PUSHER 2
+#define RETRACT_PUSHERS 3
+#define RAISE_PUSHERS 4
+#define HOME_AND_VERIFY_PUSHERS 5
+
+int pusherState = 0;
+void setup()
+{
+  Serial.begin(9600);
+  delay(250);
+DDRD = DDRD | B11111100; //assigns D is outputs 2-7, not changing 0 and 1 TX RX
+  //PORTD = B00000000; //supposed to assign D to LOW
+  digitalWrite(7, HIGH);
+  digitalWrite(6, HIGH);
+  digitalWrite(5, HIGH);
+  digitalWrite(4, HIGH);
+  digitalWrite(3, HIGH);
+  digitalWrite(2, HIGH);
+  pinMode(13, INPUT_PULLUP); //Least sig bit PINB 1 or zero SHOULD BE 1 or zero
+  pinMode(12, INPUT_PULLUP); // second least sig PINB SHOULD be 2 or zero
+  pinMode(11, INPUT_PULLUP);
+  pinMode(10, INPUT_PULLUP);
+  pinMode(9, INPUT_PULLUP);
+  pinMode(8, INPUT_PULLUP);
+ // DDRD = B11111100;
+  PORTB = PORTB | B111111; //these are the inputs for prox sensors set high
+}
+void loop()
+{
+  pusherStateMachine();
+}
+
+void pusherStateMachine(){
+  switch (pusherState) 
+{
+  case VERIFY_PUSHER_STATE:
+  Serial.print("pusherStateMachine reached..... State is---  ");
+  Serial.println(pusherState);
+  if(pusherState == 0){
+    pusherState++;
+    digitalWrite(2, LOW);
+    digitalWrite(3, LOW);
+    Serial.print("0 pusherState was verified..... State is---  ");
+  Serial.println(pusherState);
+  }
+  else{
+  }
+  case DROP_PUSHER:
+  while(PINB == 63){  
+  }
+  if(PINB == 62)
+  {
+    digitalWrite(2,LOW);
+  }
+  if(PINB == 61)
+  {
+    digitalWrite(3, LOW);
+  }
+  if(PINB == 60){
+    pusherState++;
+    Serial.print("Pushers are DROPPED... PusherState is... ");
+    Serial.println(pusherState);
+  }
+  else{
+    return;
+  }
+  case EXTEND_PUSHER:
+  digitalWrite(4, LOW);
+  digitalWrite(5, LOW);
+  Serial.print("Pushers are Extending... Pushers are Extending");
+  while(PINB != 48){  //probably NOT NEEDED
+  }
+  if(PINB == 48){ //48 means down inputs&extract inputs all simultaneously LOW
+    digitalWrite(4, HIGH);
+    digitalWrite(5, HIGH);
+    Serial.print("Pushers are Retracting... Pushers are Retracting");
+    pusherState = pusherState+2;
+    Serial.print("PusherState is... ");
+    Serial.println(pusherState);
+  }
+  case RAISE_PUSHERS:
+  if(PINB == 46 || PINB == 44 || PINB ==36){//46 RL Down and R raiseSens or 44 is R Down and R raiseSens
+    digitalWrite(2, HIGH);
+  }
+  if(PINB == 28 || PINB == 29 ||PINB == 24){//28 RL Down and L raiseSens or 29 is L Down and L raiseSens
+    digitalWrite(3, HIGH);
+  }
+  if(PINB == 12){
+    digitalWrite(3, HIGH);
+    digitalWrite(2, HIGH);
+  }
+  if(digitalRead(2) == HIGH && digitalRead(3) == HIGH){
+    Serial.print("Pushers are RAISING... Pushers are RAISING");
+    pusherState++;
+    Serial.print("PusherState is... ");
+    Serial.println(pusherState);
+  }
+  else{
+    return;
+  }
+  case HOME_AND_VERIFY_PUSHERS:
+  if(PINB == 63){
+    Serial.println("PusherStateMachine COMPLETED COMPLETED");
+      break; // back to main loop or parent state machine
+  }
+  else{
+    while(PINB != 63){
+    Serial.println("waiting for pushers to HOME");
+    }
+    break;
+  }
+}
+}
+//#define DETERMINE_PUSHER_STATE 0
+//#define DROP_PUSHER 1
+//#define EXTEND_PUSHER 2
+//#define RETRACT_PUSHERS 3
+//#define RAISE_PUSHERS 4
+//#define HOME_AND_VERIFY_PUSHERS 5
