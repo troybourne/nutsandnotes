@@ -1,0 +1,140 @@
+// B is 8-13 inputs    PINL ON MEGA 44,45,46,47,48,49 49=LSB
+// D is 2-7 outputs    DDRC ON MEGA 35,34,33,32,31
+/*NOTES
+ * the six NPN proximity sensors are in PORTB pins 8,9,10,11,12,13
+ * 8,9,10,11,12,13 correlate to binary values 32,16,8,4,2,1 respectively of PINB register 
+ * when no sensors are active PINB = 64
+ */
+#define VERIFY_PUSHER_STATE 0
+#define DROP_PUSHER 1
+#define EXTEND_PUSHER 2
+#define RETRACT_PUSHERS 3
+#define RAISE_PUSHERS 4
+#define HOME_AND_VERIFY_PUSHERS 5
+
+int pusherState = 0;
+void setup()
+{
+  Serial.begin(9600);
+  delay(250);
+DDRC = DDRC | B11111100; //assigns D is outputs 2-7, not changing 0 and 1 TX RX
+  PORTC = B00000000; //supposed to assign D to LOW
+//  digitalWrite(36, HIGH);
+//  digitalWrite(35, HIGH);
+//  digitalWrite(34, HIGH);
+//  digitalWrite(33, HIGH);
+//  digitalWrite(32, HIGH);
+//  digitalWrite(31, HIGH);
+
+//  pinMode(13, INPUT_PULLUP); //bit
+//  pinMode(12, INPUT_PULLUP);
+//  pinMode(11, INPUT_PULLUP);
+//  pinMode(10, INPUT_PULLUP);
+//  pinMode(9, INPUT_PULLUP);
+//  pinMode(8, INPUT_PULLUP);
+
+  
+  
+ // DDRD = B11111100;
+  
+  PORTC = PORTC | B111111;
+}
+
+void loop()
+{
+//  if(pusherState == 0){
+//    //pusherState++;
+//    Serial.print("pusherState is ");
+//    Serial.println(pusherState);
+//  }
+  pusherStateMachine();
+}
+
+void pusherStateMachine(){
+  
+  switch (pusherState) 
+{
+  case VERIFY_PUSHER_STATE:
+  Serial.print("pusherStateMachine reached..... State is---  ");
+  Serial.println(pusherState);
+  if(pusherState == 0){
+    pusherState++;
+    digitalWrite(32, LOW);
+    digitalWrite(33, LOW);
+    Serial.print("0 pusherState was verified..... State is---  ");
+  Serial.println(pusherState);
+  }
+  else{
+  }
+  case DROP_PUSHER:
+  while(PINL == 63){  
+  }
+  if(PINL == 62)
+  {
+    digitalWrite(2,LOW);
+  }
+  if(PINL == 61)
+  {
+    digitalWrite(3, LOW);
+  }
+  if(PINL == 60){
+    pusherState++;
+    Serial.print("Pushers are DROPPED... PusherState is... ");
+    Serial.println(pusherState);
+  }
+  else{
+    return;
+  }
+  case EXTEND_PUSHER:
+  digitalWrite(34, LOW);
+  digitalWrite(35, LOW);
+  Serial.print("Pushers are Extending... Pushers are Extending");
+  while(PINL != 48){  //probably NOT NEEDED
+  }
+  if(PINL == 48){ //48 means down inputs&extract inputs all simultaneously LOW
+    digitalWrite(34, HIGH);
+    digitalWrite(35, HIGH);
+    Serial.print("Pushers are Retracting... Pushers are Retracting");
+    pusherState = pusherState+2;
+    Serial.print("PusherState is... ");
+    Serial.println(pusherState);
+  }
+  case RAISE_PUSHERS:
+  if(PINL == 46 || PINL == 44 || PINL ==36){//46 RL Down and R raiseSens or 44 is R Down and R raiseSens
+    digitalWrite(32, HIGH);
+  }
+  if(PINL == 28 || PINL == 29 ||PINL == 24){//28 RL Down and L raiseSens or 29 is L Down and L raiseSens
+    digitalWrite(33, HIGH);
+  }
+  if(PINL == 12){
+    digitalWrite(33, HIGH);
+    digitalWrite(32, HIGH);
+  }
+  if(digitalRead(32) == HIGH && digitalRead(33) == HIGH){
+    Serial.print("Pushers are RAISING... Pushers are RAISING");
+    pusherState++;
+    Serial.print("PusherState is... ");
+    Serial.println(pusherState);
+  }
+  else{
+    return;
+  }
+  case HOME_AND_VERIFY_PUSHERS:
+  if(PINL == 63){
+    Serial.println("PusherStateMachine COMPLETED COMPLETED");
+      break; // back to main loop or parent state machine
+  }
+  else{
+    while(PINL != 63){
+    Serial.println("waiting for pushers to HOME");
+    }
+    break;
+  }
+}
+}
+//#define DETERMINE_PUSHER_STATE 0
+//#define DROP_PUSHER 1
+//#define EXTEND_PUSHER 2
+//#define RETRACT_PUSHERS 3
+//#define RAISE_PUSHERS 4
+//#define HOME_AND_VERIFY_PUSHERS 5
