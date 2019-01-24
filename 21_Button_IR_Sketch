@@ -1,0 +1,165 @@
+/* YourDuino.com Example Software Sketch
+ IR Remote Kit Test
+ Uses YourDuino.com IR Infrared Remote Control Kit 2
+ http://arduino-direct.com/sunshop/index.php?l=product_detail&p=153
+ based on code by Ken Shirriff - http://arcfn.com
+ Get Library at: https://github.com/shirriff/Arduino-IRremote
+ Unzip folder into Libraries. RENAME folder IRremote
+ terry@yourduino.com */
+
+/*-----( Import needed libraries )-----*/
+
+#include "IRremote.h"
+
+/*-----( Declare Constants )-----*/
+int receiver = 9; // pin 1 of IR receiver to Arduino digital pin 11
+
+
+/*-----( Declare objects )-----*/
+IRrecv irrecv(receiver);           // create instance of 'irrecv'
+decode_results results;            // create instance of 'decode_results'
+/*-----( Declare Variables )-----*/
+
+
+void setup()   /*----( SETUP: RUNS ONCE )----*/
+{
+//  pinMode(receiver, INPUT_PULLUP);
+  Serial.begin(9600);
+  Serial.println("IR Receiver Raw Data + Button Decode Test");
+  irrecv.enableIRIn(); // Start the receiver
+DDRD = 11011100;
+PORTD = B00100000;
+}/*--(end setup )---*/
+
+
+void loop()   /*----( LOOP: RUNS CONSTANTLY )----*/
+{
+  Serial.println("main loop has been reached");
+  if (irrecv.decode(&results)) // have we received an IR signal?
+
+  {
+    Serial.print(F("result = 0x"));
+    Serial.println(results.value, HEX);  //UN Comment to see raw values
+    translateIR(); 
+    irrecv.resume(); // receive the next value
+  }  
+
+}/* --(end main loop )-- */
+
+/*-----( Declare User-written Functions )-----*/
+void translateIR() // takes action based on IR code received
+{
+
+  switch(results.value)
+
+  {
+
+  case 0xE318261B: Serial.println(" E-Stop");
+  PORTD = B00100100;
+    EStop();
+  return;
+  case 0xFFA25D: Serial.println(" E-Stop"); 
+  PORTD = B00100100;
+    EStop();
+  return;
+  case 0xFFA25: Serial.println(" E-Stop"); 
+  PORTD = B00100100;
+    EStop();
+  return;
+  case 0x511DBB: Serial.println(" Manual Mode");    break;
+  case 0xFF629D: Serial.println(" Manual Mode");    break;
+  case 0xFF629: Serial.println(" Manual Mode");    break;
+  case 0xEE886D7F: Serial.println(" Auto Mode");    break;
+  case 0xFFE21D: Serial.println(" Auto Mode");    break;
+  case 0xFFE21: Serial.println(" Auto Mode");    break;
+  case 0x52A3D41F: Serial.println(" Start");   break; 
+  case 0xFF22DD: Serial.println(" Start");   break; 
+  case 0xFF22D: Serial.println(" Start");   break;
+  case 0xD7E84B1B: Serial.println(" To Conveyor"); 
+  PORTD = B00010000;
+  break;
+  case 0xFF02FD: Serial.println(" To Conveyor");
+  PORTD = B00010000;
+  break;
+  case 0xFF02F: Serial.println(" To Conveyor");
+  PORTD = B00010000;
+  break;
+  case 0x20FE4DBB: Serial.println(" To Stack");
+  PORTD = B00001000;
+  break;
+  case 0xFFC23D: Serial.println(" To Stack");    
+  PORTD = B00001000;  
+  break;
+  case 0xFFC23: Serial.println(" To Stack");    
+  PORTD = B00001000;  
+  break;
+  case 0xF076C13B: Serial.println(" Activate Vacuum");    break;
+  case 0xFFE01F: Serial.println(" Activate Vacuum");    break;
+  case 0xA3C8EDDB: Serial.println(" LOWER Carriage");    break;
+  case 0xFFA857: Serial.println(" LOWER Carriage");    break;
+  case 0xE5CFBD7F: Serial.println(" RAISE Carriage");    break;
+  case 0xFF906F: Serial.println(" RAISE Carriage");    break;
+  case 0xC101E57B: Serial.println(" Release Vacuum");    break;
+  case 0xFF6897: Serial.println(" Release Vacuum");    break;
+  case 0xFF689: Serial.println(" Release Vacuum");    break;
+  case 0x97483BFB: Serial.println(" Arrows");    break;
+  case 0xFF9867: Serial.println(" Arrows");    break;
+  case 0xFF986: Serial.println(" Arrows");    break;
+  case 0xF0C41643: Serial.println(" U/SD");    break;
+  case 0xFFB04F: Serial.println(" U/SD");    break;
+  case 0xFFB04: Serial.println(" U/SD");    break;
+  case 0x9716BE3F: Serial.println(" 1");    break;
+  case 0xFF30CF: Serial.println(" 1");    break;
+  case 0xFF30C: Serial.println(" 1");    break;
+  case 0xFF18E7: Serial.println(" 2");    break;
+  case 0xFF18E: Serial.println(" 2");    break;
+  case 0x3D9AE3F7: Serial.println(" 2");    break;
+  case 0x6182021B: Serial.println(" 3");    break;
+  case 0xFF7A85: Serial.println(" 3");    break; 
+  case 0xFF7A8: Serial.println(" 3");    break; 
+  case 0x8C22657B: Serial.println(" 4");    break;
+  case 0xFF10EF: Serial.println(" 4");    break;
+  case 0xFF10E: Serial.println(" 4");    break;
+  case 0x488F3CBB: Serial.println(" 5");    break;
+  case 0xFF38C7: Serial.println(" 5");    break;
+  case 0xFF38C: Serial.println(" 5");    break;
+  case 0x449E79F: Serial.println(" 6");    break;
+  case 0xFF5AA5: Serial.println(" 6");    break;
+  case 0xFF5AA: Serial.println(" 6");    break;
+  case 0x32C6FDF7: Serial.println(" 7");    break;
+  case 0xFF42BD: Serial.println(" 7");    break;
+  case 0xFF42B: Serial.println(" 7");    break;
+  case 0x1BC0157B: Serial.println(" 8");    break;
+  case 0xFF4AB5: Serial.println(" 8");    break;
+  case 0xFF4AB: Serial.println(" 8");    break;
+  case 0x3EC3FC1B: Serial.println(" 9");    break;
+  case 0xFF52AD: Serial.println(" 9");    break;
+  case 0xFF52A: Serial.println(" 9");    break;
+//  case 0xFF52AD: Serial.println(" #");    break;
+ // case 0xFFFFFFFF: Serial.println(" REPEAT");break; 
+
+  default: 
+    Serial.println(" other button   ");
+
+  }
+
+   delay(150); 
+} //END translateIR
+
+void EStop()
+{
+    
+    Serial.println("hard e stop reached");
+  Serial.println(PIND);
+  while((PIND)== 37){
+    Serial.println("waiting for e-stop reset button to be pressed");
+    Serial.println(PIND);
+  }
+  while((PIND)== 5){
+   Serial.println("waiting for e-stop reset button to be released"); 
+   Serial.println(PIND);
+  }
+  Serial.println("exiting E Stop mode");
+  PORTD = 00000000;
+  return;
+  }
