@@ -34,7 +34,7 @@ PORTD = B00100000;
 
 void loop()   /*----( LOOP: RUNS CONSTANTLY )----*/
 {
-  Serial.println("main loop has been reached");
+  //Serial.println("main loop has been reached");
   if (irrecv.decode(&results)) // have we received an IR signal?
 
   {
@@ -160,6 +160,15 @@ void EStop()
    Serial.println(PIND);
   }
   Serial.println("exiting E Stop mode");
-  PORTD = 00000000;
+  //below for loop can display strobe and beeper for exiting EStop mode notification
+  for (int i = 0; i <= 10; i++){
+      PORTD = B00000100;
+      delay(250);
+      PORTD = B00000000;
+      delay(250);
+    }
+  PORTD = B00100000; // this allows for immediate retriggering of the EStop mode
   return;
   }
+
+
