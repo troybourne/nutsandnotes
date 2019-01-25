@@ -27,7 +27,7 @@ void setup()   /*----( SETUP: RUNS ONCE )----*/
   Serial.begin(9600);
   Serial.println("IR Receiver Raw Data + Button Decode Test");
   irrecv.enableIRIn(); // Start the receiver
-DDRD = 11011100;
+DDRD = B11011100;
 PORTD = B00100000;
 }/*--(end setup )---*/
 
@@ -143,21 +143,25 @@ void translateIR() // takes action based on IR code received
 
   }
 
-   delay(150); 
+   //delay(150); 
 } //END translateIR
 
 void EStop()
 {
-    
+  PORTD = B00100100;
+  delay(25);  
     Serial.println("hard e stop reached");
+    
   Serial.println(PIND);
-  while((PIND)!= 5){ // now != 5 MUCH more reliable and even IF it equals 5 still requires hardware switch safer
+  while((PIND)!= 5){
     Serial.println("waiting for e-stop reset button to be pressed");
-    Serial.println(PIND);
+  //  Serial.println(PIND);
+  delay(15);
   }
   while((PIND)== 5){
    Serial.println("waiting for e-stop reset button to be released"); 
    Serial.println(PIND);
+   delay(15);
   }
   Serial.println("exiting E Stop mode");
   //below for loop can display strobe and beeper for exiting EStop mode notification
@@ -167,8 +171,22 @@ void EStop()
       PORTD = B00000000;
       delay(250);
     }
-  PORTD = B00100000; // this allows for immediate retriggering of the EStop mode
+ // PORTD = B00100000;
+ PORTD = PORTD ^ 4; //This will toggle only the bit in the 4 column
+ delay(1500);
+ Serial.println(PIND);
+ delay(250);
+ PORTD = PORTD ^ 12; //this will toggle the bits that add to 12, namely  4 and 8
+ delay(1500);
+  Serial.println(PIND);
   return;
   }
 
 
+
+
+
+
+
+
+/* ( THE END ) */
