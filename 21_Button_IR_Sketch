@@ -151,7 +151,7 @@ void EStop()
     
     Serial.println("hard e stop reached");
   Serial.println(PIND);
-  while((PIND)== 37){
+  while((PIND)!= 5){ // now != 5 MUCH more reliable and even IF it equals 5 still requires hardware switch safer
     Serial.println("waiting for e-stop reset button to be pressed");
     Serial.println(PIND);
   }
