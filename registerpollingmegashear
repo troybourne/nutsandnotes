@@ -35,7 +35,10 @@ DDRC = DDRC | B11111100; //assigns D is outputs 2-7, not changing 0 and 1 TX RX
 
   
   
- // DDRD = B11111100;
+  DDRK = B11111111;
+  PORTK = B11111111;
+  DDRF = DDRF | B11111111;
+  PORTF = B11111111;
   
   PORTC = PORTC | B111111;
 }
@@ -59,8 +62,9 @@ void pusherStateMachine(){
   Serial.println(pusherState);
   if(pusherState == 0){
     pusherState++;
-    digitalWrite(32, LOW);
-    digitalWrite(33, LOW);
+    //digitalWrite(32, LOW);
+    //digitalWrite(33, LOW);
+    PORTK = B00000001; //stop chain???
     Serial.print("0 pusherState was verified..... State is---  ");
   Serial.println(pusherState);
   }
@@ -71,7 +75,8 @@ void pusherStateMachine(){
   }
   if(PINL == 62)
   {
-    digitalWrite(2,LOW);
+    //digitalWrite(2,LOW);
+    
   }
   if(PINL == 61)
   {
