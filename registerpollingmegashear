@@ -1,9 +1,35 @@
-// B is 8-13 inputs    PINL ON MEGA 44,45,46,47,48,49 49=LSB
-// D is 2-7 outputs    DDRC ON MEGA 35,34,33,32,31
+// Visual Micro is in vMicro>General>Tutorial Mode
+// 
+/*
+    Name:       RegistersWork2560ShearVS.ino
+    Created:	2/7/2019 8:43:43 AM
+    Author:     ACORN\TROY
+*/
+
+// Define User Types below here or use a .h file
+//
+
+// Define Function Prototypes that use User Types below here or use a .h file
+//
+
+// Define Functions below here or use other .ino or cpp files
+//
+
+// The setup() function runs once each time the micro-controller starts
+
+// NOTES TO KEEP IN MIND*********
+//PORTF HAS at least 5 availble outputs
+
+//PORT MAPPING
+//PINL ON MEGA 44,45,46,47,48,49 49=LSB  L is proximity sensors INPUTS
+//PORTF on MEGA analog A7, A6, A5, A4, A3, A2, A1, A0 ALL OUTPUTS
+//A0 = DROP ON LOW, A1 = EXTEND ON LOW, 
+// DDRC ON MEGA   30, 31, 32, 33, 34, 35, 36, 37
+// 
+//
 /*NOTES
- * the six NPN proximity sensors are in PORTB pins 8,9,10,11,12,13
- * 8,9,10,11,12,13 correlate to binary values 32,16,8,4,2,1 respectively of PINB register 
- * when no sensors are active PINB = 64
+ * the six NPN proximity sensors are in PORTL 
+ * correlate to binary values 32,16,8,4,2,1 respectively of PINL register
  */
 #define VERIFY_PUSHER_STATE 0
 #define DROP_PUSHER 1
@@ -13,130 +39,150 @@
 #define HOME_AND_VERIFY_PUSHERS 5
 
 int pusherState = 0;
+bool pusherToRun = 0;
+
+// DDR(bank) - 1 is to assign and output, 0 is an input
+// PORT(bank) - if output then 0 is LOW and 1 is high; if input then then 1 is INPUT_PULLUP and 0 is no pullup enabled
+// PIN(bank) - reads the value of that register
 void setup()
 {
-  Serial.begin(9600);
-  delay(250);
-DDRC = DDRC | B11111100; //assigns D is outputs 2-7, not changing 0 and 1 TX RX
-  PORTC = B00000000; //supposed to assign D to LOW
-//  digitalWrite(36, HIGH);
-//  digitalWrite(35, HIGH);
-//  digitalWrite(34, HIGH);
-//  digitalWrite(33, HIGH);
-//  digitalWrite(32, HIGH);
-//  digitalWrite(31, HIGH);
-
-//  pinMode(13, INPUT_PULLUP); //bit
-//  pinMode(12, INPUT_PULLUP);
-//  pinMode(11, INPUT_PULLUP);
-//  pinMode(10, INPUT_PULLUP);
-//  pinMode(9, INPUT_PULLUP);
-//  pinMode(8, INPUT_PULLUP);
-
-  
-  
-  DDRK = B11111111;
-  PORTK = B11111111;
-  DDRF = DDRF | B11111111;
-  PORTF = B11111111;
-  
-  PORTC = PORTC | B111111;
+	Serial.begin(9600);
+	delay(250);
+	DDRC = DDRC | B00000000; //30, 31, 32, 33, 34, 35, 36, 37 all inputs
+	PORTC = B00000000; //supposed to assign D to LOW
+	DDRB = DDRB | B00000000; //13, 12, 11, 10, 50, 51, 52 ,53 all inputs
+	PORTB = B11111111; // red dip switches... 
+	DDRF = B11111111; //analog A7, A6, A5, A4, A3, A2, A1, A0 ALL OUTPUTS
+	PORTF = B11111111;
+	DDRK = B11111111;
+	PORTK = B11111111;
+	DDRL = B11000000;
+	PORTL = B00111111;
+	//PORTC = PORTC | B111111;
 }
 
+void checkChainMotor() {
+	if (pusherToRun == 0) {
+		if (PINB == 0) {
+			Serial.println("pusherToRun=true 1");
+			pusherToRun = 1;
+		}
+		else {
+			Serial.println("pusherToRun=false 0");
+			return;
+		}
+	}
+}
+
+//void forwardChain() {
+
+//}
+void pusherStateMachine() {
+
+	switch (pusherState)
+	{
+		Serial.println(PINL);
+	case VERIFY_PUSHER_STATE:
+		Serial.print("pusherStateMachine reached..... State is---  ");
+		Serial.println(pusherState);
+		if (PINB == 0) { 
+			break; }
+		if (pusherState == 0) {
+			pusherState++;
+			PORTF = PORTF | B00110000; //stop chain???
+			
+			Serial.print("0 pusherState was verified..... State is---  ");
+			Serial.println(pusherState);
+		}
+		else {
+		}
+	case DROP_PUSHER:
+		PORTF = PORTF & B11111110; //drop valve triggered
+
+		while (PINL != 60) {
+
+		}
+		if (PINL == 60) {
+			pusherState++;
+			Serial.print("Pushers are DROPPED... PusherState is... ");
+			Serial.println(pusherState);
+		}
+		else {
+			return;
+		}
+	case EXTEND_PUSHER:
+		PORTF = PORTF & B11111100;
+		Serial.print("Pushers are Extending... Pushers are Extending");
+		while (PINL != 48) {  //probably NOT NEEDED
+		}
+		if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
+			PORTF = PORTF | B00000010;  // this sets retraction to happen
+			Serial.print("Pushers are Retracting... Pushers are Retracting");
+			pusherState = pusherState + 1;
+			Serial.print("PusherState is... ");
+			Serial.println(pusherState);
+		}
+	case RETRACT_PUSHERS:
+		Serial.println("retract was reached");
+		Serial.println(PINL);
+		if (PINL == 12) {
+			pusherState++;
+			Serial.println("both retract sensors triggered");
+			return;
+		}
+		if (PINL <= 28) {
+			Serial.println("<= 28 reached");
+			while (PINL != 44) {
+				Serial.println("not 44 or 36 reached");
+				Serial.println(PINL);
+			}
+			pusherState++;
+			Serial.println("both retract sensors triggered");
+			return;
+		}
+		if (PINL == 44 || PINL == 36) { // THIS IF STATEMENT WORKS
+			while (PINL > 28) {
+				Serial.println(PINL);
+			}
+			pusherState++;
+			Serial.println("both retract sensors triggered");
+			return;
+		}
+		else { return; }
+	case RAISE_PUSHERS:
+		Serial.println("Raise Pushers REACHED");
+		delay(2000);
+		PORTF = PORTF | B00000011;
+		pusherState++;
+		pusherToRun = 0;
+	case HOME_AND_VERIFY_PUSHERS:
+		while (PINL != 63) {
+				Serial.println("waiting for pushers to HOME");
+				Serial.println(PINL);
+			}
+		pusherState = 0;
+		checkChainMotor();
+		break;
+		}
+	}
+
+
+
+// Add the main program code into the continuous loop() function
 void loop()
 {
-//  if(pusherState == 0){
-//    //pusherState++;
-//    Serial.print("pusherState is ");
-//    Serial.println(pusherState);
-//  }
-  pusherStateMachine();
+
+	if (PINB > 0) {
+		if (pusherToRun == 1) {
+			pusherStateMachine();
+			Serial.println(PINL);
+		}
+	}
+	else {
+		checkChainMotor();
+	}
 }
 
-void pusherStateMachine(){
-  
-  switch (pusherState) 
-{
-  case VERIFY_PUSHER_STATE:
-  Serial.print("pusherStateMachine reached..... State is---  ");
-  Serial.println(pusherState);
-  if(pusherState == 0){
-    pusherState++;
-    //digitalWrite(32, LOW);
-    //digitalWrite(33, LOW);
-    PORTK = B00000001; //stop chain???
-    Serial.print("0 pusherState was verified..... State is---  ");
-  Serial.println(pusherState);
-  }
-  else{
-  }
-  case DROP_PUSHER:
-  while(PINL == 63){  
-  }
-  if(PINL == 62)
-  {
-    //digitalWrite(2,LOW);
-    
-  }
-  if(PINL == 61)
-  {
-    digitalWrite(3, LOW);
-  }
-  if(PINL == 60){
-    pusherState++;
-    Serial.print("Pushers are DROPPED... PusherState is... ");
-    Serial.println(pusherState);
-  }
-  else{
-    return;
-  }
-  case EXTEND_PUSHER:
-  digitalWrite(34, LOW);
-  digitalWrite(35, LOW);
-  Serial.print("Pushers are Extending... Pushers are Extending");
-  while(PINL != 48){  //probably NOT NEEDED
-  }
-  if(PINL == 48){ //48 means down inputs&extract inputs all simultaneously LOW
-    digitalWrite(34, HIGH);
-    digitalWrite(35, HIGH);
-    Serial.print("Pushers are Retracting... Pushers are Retracting");
-    pusherState = pusherState+2;
-    Serial.print("PusherState is... ");
-    Serial.println(pusherState);
-  }
-  case RAISE_PUSHERS:
-  if(PINL == 46 || PINL == 44 || PINL ==36){//46 RL Down and R raiseSens or 44 is R Down and R raiseSens
-    digitalWrite(32, HIGH);
-  }
-  if(PINL == 28 || PINL == 29 ||PINL == 24){//28 RL Down and L raiseSens or 29 is L Down and L raiseSens
-    digitalWrite(33, HIGH);
-  }
-  if(PINL == 12){
-    digitalWrite(33, HIGH);
-    digitalWrite(32, HIGH);
-  }
-  if(digitalRead(32) == HIGH && digitalRead(33) == HIGH){
-    Serial.print("Pushers are RAISING... Pushers are RAISING");
-    pusherState++;
-    Serial.print("PusherState is... ");
-    Serial.println(pusherState);
-  }
-  else{
-    return;
-  }
-  case HOME_AND_VERIFY_PUSHERS:
-  if(PINL == 63){
-    Serial.println("PusherStateMachine COMPLETED COMPLETED");
-      break; // back to main loop or parent state machine
-  }
-  else{
-    while(PINL != 63){
-    Serial.println("waiting for pushers to HOME");
-    }
-    break;
-  }
-}
-}
 //#define DETERMINE_PUSHER_STATE 0
 //#define DROP_PUSHER 1
 //#define EXTEND_PUSHER 2
