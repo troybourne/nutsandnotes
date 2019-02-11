@@ -1,0 +1,358 @@
+// Visual Micro is in vMicro>General>Tutorial Mode
+// 
+/*
+    Name:       RegistersWork2560ShearVSMERGE.ino
+    Created:  2/11/2019 1:30PM
+    Author:     ACORN\TROY
+*/
+
+// Define User Types below here or use a .h file
+#include "IRremote.h"
+//
+
+// Define Function Prototypes that use User Types below here or use a .h file
+void IR();
+
+// Define Functions below here or use other .ino or cpp files
+//
+
+// The setup() function runs once each time the micro-controller starts
+
+// NOTES TO KEEP IN MIND*********
+//PORTF HAS at least 5 availble outputs
+
+//PORT MAPPING
+//PINL ON MEGA 44,45,46,47,48,49 49=LSB  L is proximity sensors INPUTS
+//PORTF on MEGA analog A7, A6, A5, A4, A3, A2, A1, A0 ALL OUTPUTS
+//A0 = DROP ON LOW, A1 = EXTEND ON LOW, 
+// DDRC ON MEGA   30, 31, 32, 33, 34, 35, 36, 37
+//IR with 3 LED for Auto(green), Manual(yellow), EStop(red) all on PORTD 
+//PORTD is as followed 38,x,x,x,18,19,20,21 with 20 and 21 as inputs... 20 EStop Reset, 21 IRSignal pin
+// Auto(green)19 bit 4, Manual(yellow) bit 8, EStop(red) bit 128 -- all on PORTD
+//
+/*NOTES
+ * the six NPN proximity sensors are in PORTL 
+ * correlate to binary values 32,16,8,4,2,1 respectively of PINL register
+ */
+#define VERIFY_PUSHER_STATE 0
+#define DROP_PUSHER 1
+#define EXTEND_PUSHER 2
+#define RETRACT_PUSHERS 3
+#define RAISE_PUSHERS 4
+#define HOME_AND_VERIFY_PUSHERS 5
+
+int pusherState = 0;
+bool pusherToRun = 0;
+
+int receiver = 21; // pin 1 of IR receiver to Arduino digital pin 11
+IRrecv irrecv(receiver); // create instance of 'irrecv'
+decode_results results; // create instance of 'decode_results'
+
+// DDR(bank) - 1 is to assign an output, 0 is an input
+// PORT(bank) - if output then 0 is LOW and 1 is high; if input then then 1 is INPUT_PULLUP and 0 is no pullup enabled
+// PIN(bank) - reads the value of that register
+
+void setup()
+{
+  Serial.begin(9600);
+  delay(250);
+  Serial.println("IR Receiver Raw Data + Button Decode Test");
+  irrecv.enableIRIn(); // Start the receiver
+  DDRD = DDRD | B11111100; //b128 redLED(pin38), b8 yellowLED(pin18), b4 greenLED(pin19), b2 inputEStopHardReset, b1 IRSignal
+  PORTD = B00000010; //b2 is PULLUP
+  DDRC = DDRC | B00000000; //30, 31, 32, 33, 34, 35, 36, 37 all inputs
+  PORTC = B00000000; //supposed to assign C to LOW ****PORTC NOT BEING USED*********
+  DDRB = DDRB | B00000000; //13, 12, 11, 10, 50, 51, 52 ,53 all inputs
+  PORTB = B11111111; // red dip switches... 
+  DDRF = B11111111; //analog A7, A6, A5, A4, A3, A2, A1, A0 ALL OUTPUTS
+  PORTF = B11111111;
+  DDRK = B11111111;
+  PORTK = B11111111;
+  DDRL = B11000000;
+  PORTL = B00111111;
+  //PORTC = PORTC | B111111;
+}
+void IR()
+{
+  //Serial.println("main loop has been reached");
+  if (irrecv.decode(&results)) // have we received an IR signal?
+  {
+    Serial.print(F("result = 0x"));
+    Serial.println(results.value, HEX); //UN Comment to see raw values
+    translateIR();
+    irrecv.resume(); // receive the next value
+  }
+}/* --(end IR loop )-- */
+
+void EStop()
+{
+	if (PINB >= 128) {
+		while (PINB >= 128) {
+			Serial.println("EStop hard button entered EStop Mode");
+		}
+		Serial.println("breaking out of EStop");
+		return;
+}
+  PORTD = B10000000;
+  delay(25);
+  Serial.println("hard e stop reached");
+  Serial.println(PIND);
+  while ((PIND) != 129) {
+    Serial.println("waiting for e-stop reset button to be pressed");
+    delay(10);
+    Serial.println(PIND);
+    delay(15);
+  }
+  while ((PIND) == 129) {
+    Serial.println("waiting for e-stop reset button to be released");
+    Serial.println(PIND);
+    delay(15);
+  }
+  Serial.println("exiting E Stop mode");
+  //below for loop can display strobe and beeper for exiting EStop mode notification
+  for (int i = 0; i <= 10; i++) {
+    PORTD = B10000000;
+    delay(250);
+    PORTD = B00000000;
+    delay(250);
+  }
+  // PORTD = B00100000;
+  /*
+  PORTD = PORTD ^ 4; //This will toggle only the bit in the 4 column
+  delay(1500);
+  Serial.println(PIND);
+  delay(250);
+  PORTD = PORTD ^ 28; //this will toggle the bits that add to 28, namely 4, 8 and 16 turning on 8 and 16
+  delay(1500);
+  Serial.println(PIND);
+  PORTD = PORTD ^ 24; //this will flip bits for 8 and 16 off
+  */
+  return;
+}
+
+void translateIR() // takes action based on IR code received
+{
+  switch (results.value)
+  {
+  case 0xE318261B: Serial.println(" E-Stop");
+    PORTD = B10000000;
+    EStop();
+    return;
+  case 0xFFA25D: Serial.println(" E-Stop");
+    PORTD = B10000000;
+    EStop();
+    return;
+  case 0xFFA25: Serial.println(" E-Stop");
+    PORTD = B10000000;
+    EStop();
+    return;
+  case 0x511DBB: Serial.println(" Manual Mode"); break;
+  case 0xFF629D: Serial.println(" Manual Mode"); break;
+  case 0xFF629: Serial.println(" Manual Mode"); break;
+  case 0xEE886D7F: Serial.println(" Auto Mode"); break;
+  case 0xFFE21D: Serial.println(" Auto Mode"); break;
+  case 0xFFE21: Serial.println(" Auto Mode"); break;
+  case 0x52A3D41F: Serial.println(" Start"); break;
+  case 0xFF22DD: Serial.println(" Start"); break;
+  case 0xFF22D: Serial.println(" Start"); break;
+  case 0xD7E84B1B: Serial.println(" To Conveyor");
+    PORTD = B00001000;
+    break;
+  case 0xFF02FD: Serial.println(" To Conveyor");
+    PORTD = B00001000;
+    break;
+  case 0xFF02F: Serial.println(" To Conveyor");
+    PORTD = B00001000;
+    break;
+  case 0x20FE4DBB: Serial.println(" To Stack");
+    PORTD = B00000100;
+    break;
+  case 0xFFC23D: Serial.println(" To Stack");
+    PORTD = B00000100;
+    break;
+  case 0xFFC23: Serial.println(" To Stack");
+    PORTD = B00000100;
+    break;
+  case 0xF076C13B: Serial.println(" Activate Vacuum"); break;
+  case 0xFFE01F: Serial.println(" Activate Vacuum"); break;
+  case 0xA3C8EDDB: Serial.println(" LOWER Carriage"); break;
+  case 0xFFA857: Serial.println(" LOWER Carriage"); break;
+  case 0xE5CFBD7F: Serial.println(" RAISE Carriage"); break;
+  case 0xFF906F: Serial.println(" RAISE Carriage"); break;
+  case 0xC101E57B: Serial.println(" Release Vacuum"); break;
+  case 0xFF6897: Serial.println(" Release Vacuum"); break;
+  case 0xFF689: Serial.println(" Release Vacuum"); break;
+  case 0x97483BFB: Serial.println(" Arrows"); break;
+  case 0xFF9867: Serial.println(" Arrows"); break;
+  case 0xFF986: Serial.println(" Arrows"); break;
+  case 0xF0C41643: Serial.println(" U/SD"); break;
+  case 0xFFB04F: Serial.println(" U/SD"); break;
+  case 0xFFB04: Serial.println(" U/SD"); break;
+  case 0x9716BE3F: Serial.println(" 1"); break;
+  case 0xFF30CF: Serial.println(" 1"); break;
+  case 0xFF30C: Serial.println(" 1"); break;
+  case 0xFF18E7: Serial.println(" 2"); break;
+  case 0xFF18E: Serial.println(" 2"); break;
+  case 0x3D9AE3F7: Serial.println(" 2"); break;
+  case 0x6182021B: Serial.println(" 3"); break;
+  case 0xFF7A85: Serial.println(" 3"); break;
+  case 0xFF7A8: Serial.println(" 3"); break;
+  case 0x8C22657B: Serial.println(" 4"); break;
+  case 0xFF10EF: Serial.println(" 4"); break;
+  case 0xFF10E: Serial.println(" 4"); break;
+  case 0x488F3CBB: Serial.println(" 5"); break;
+  case 0xFF38C7: Serial.println(" 5"); break;
+  case 0xFF38C: Serial.println(" 5"); break;
+  case 0x449E79F: Serial.println(" 6"); break;
+  case 0xFF5AA5: Serial.println(" 6"); break;
+  case 0xFF5AA: Serial.println(" 6"); break;
+  case 0x32C6FDF7: Serial.println(" 7"); break;
+  case 0xFF42BD: Serial.println(" 7"); break;
+  case 0xFF42B: Serial.println(" 7"); break;
+  case 0x1BC0157B: Serial.println(" 8"); break;
+  case 0xFF4AB5: Serial.println(" 8"); break;
+  case 0xFF4AB: Serial.println(" 8"); break;
+  case 0x3EC3FC1B: Serial.println(" 9"); break;
+  case 0xFF52AD: Serial.println(" 9"); break;
+  case 0xFF52A: Serial.println(" 9"); break;
+    // case 0xFF52AD: Serial.println(" #"); break;
+    // case 0xFFFFFFFF: Serial.println(" REPEAT");break; 
+  default:
+    Serial.println(" other button ");
+  }
+  //delay(150); 
+} //END translateIR
+
+
+void checkChainMotor() {
+  if (pusherToRun == 0) {
+    if (PINB == 0) {
+      Serial.println("pusherToRun=true 1");
+      pusherToRun = 1;
+    }
+    else {
+      Serial.println("pusherToRun=false 0");
+      return;
+    }
+  }
+}
+
+//void forwardChain() {
+
+//}
+void pusherStateMachine() {
+
+  switch (pusherState)
+  {
+    Serial.println(PINL);
+  case VERIFY_PUSHER_STATE:
+    Serial.print("pusherStateMachine reached..... State is---  ");
+    Serial.println(pusherState);
+    if (PINB == 0) { 
+      break; }
+    if (pusherState == 0) {
+      pusherState++;
+      PORTF = PORTF | B00110000; //stop chain???
+      
+      Serial.print("0 pusherState was verified..... State is---  ");
+      Serial.println(pusherState);
+    }
+    else {
+    }
+  case DROP_PUSHER:
+    PORTF = PORTF & B11111110; //drop valve triggered
+
+    while (PINL != 60) {
+
+    }
+    if (PINL == 60) {
+      pusherState++;
+      Serial.print("Pushers are DROPPED... PusherState is... ");
+      Serial.println(pusherState);
+    }
+    else {
+      return;
+    }
+  case EXTEND_PUSHER:
+    PORTF = PORTF & B11111100;
+    Serial.print("Pushers are Extending... Pushers are Extending");
+    while (PINL != 48) {  //probably NOT NEEDED
+    }
+    if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
+      PORTF = PORTF | B00000010;  // this sets retraction to happen
+      Serial.print("Pushers are Retracting... Pushers are Retracting");
+      pusherState = pusherState + 1;
+      Serial.print("PusherState is... ");
+      Serial.println(pusherState);
+    }
+  case RETRACT_PUSHERS:
+    Serial.println("retract was reached");
+    Serial.println(PINL);
+    if (PINL == 12) {
+      pusherState++;
+      Serial.println("both retract sensors triggered");
+      return;
+    }
+    if (PINL <= 28) {
+      Serial.println("<= 28 reached");
+      while (PINL != 44) {
+        Serial.println("not 44 or 36 reached");
+        Serial.println(PINL);
+      }
+      pusherState++;
+      Serial.println("both retract sensors triggered");
+      return;
+    }
+    if (PINL == 44 || PINL == 36) { // THIS IF STATEMENT WORKS
+      while (PINL > 28) {
+        Serial.println(PINL);
+      }
+      pusherState++;
+      Serial.println("both retract sensors triggered");
+      return;
+    }
+    else { return; }
+  case RAISE_PUSHERS:
+    Serial.println("Raise Pushers REACHED");
+    delay(2000);
+    PORTF = PORTF | B00000011;
+    pusherState++;
+    pusherToRun = 0;
+  case HOME_AND_VERIFY_PUSHERS:
+    while (PINL != 63) {
+        Serial.println("waiting for pushers to HOME");
+        Serial.println(PINL);
+      }
+    pusherState = 0;
+    checkChainMotor();
+    break;
+    }
+  }
+
+
+
+// Add the main program code into the continuous loop() function
+void loop()
+{
+	Serial.println(PINB);
+  while (PINB < 128) {
+    IR();
+    if (PINB > 0) {
+      if (pusherToRun == 1) {
+        pusherStateMachine();
+        Serial.println(PINL);
+      }
+    }
+    else {
+      checkChainMotor();
+    }
+  }
+   EStop();
+}
+
+//#define DETERMINE_PUSHER_STATE 0
+//#define DROP_PUSHER 1
+//#define EXTEND_PUSHER 2
+//#define RETRACT_PUSHERS 3
+//#define RAISE_PUSHERS 4
+//#define HOME_AND_VERIFY_PUSHERS 5
