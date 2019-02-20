@@ -1,7 +1,7 @@
 // Visual Micro is in vMicro>General>Tutorial Mode
 // 
 /*
-    Name:       RegistersWork2560ShearVSMERGE.ino   now ShearWithInterrupts on 2/20/19
+    Name:       RegistersWork2560ShearVSMERGE.ino
     Created:  2/11/2019 1:30PM
     Author:     ACORN\TROY
 */
@@ -52,17 +52,17 @@ void bothVacRelease();
 
 int pusherState = 0;
 bool pusherCanRun = 0;
-int leftRetractTripped = 0;
-int rightRetractTripped = 0;
+bool leftRetractTripped = 0;
+bool rightRetractTripped = 0;
 int pusherCanRunDelay = 1500; // delay to prevent restarting pusherStateMachine because of chainPosSensor
 int forwardChainInvokedTime = 0;
 int chainPosSensor = 4;
 int returnStatePinReadF = 0;
 int returnStatePinReadK = 0;
-int bridgeStopDelay = 2500;
+int bridgeStopDelay = 1000;
 int intializeStopBridge = 0;
 
-int receiver = 21; // pin 1 of IR receiver to Arduino digital pin 11
+int receiver = 14; // pin 1 of IR receiver to Arduino digital pin 11
 IRrecv irrecv(receiver); // create instance of 'irrecv'
 decode_results results; // create instance of 'decode_results'
 
@@ -79,8 +79,10 @@ void setup()
   delay(250);
   Serial.println("IR Receiver Raw Data + Button Decode Test");
   irrecv.enableIRIn(); // Start the receiver
-  DDRD = DDRD | B11111100; //b128 redLED(pin38), b8 yellowLED(pin18), b4 greenLED(pin19), b2 inputEStopHardReset, b1 IRSignal
-  PORTD = B00000010; //b2 is PULLUP
+  //DDRD = DDRD | B1111110; //b128 redLED(pin38), b8 yellowLED(pin18), b4 greenLED(pin19), b2 inputEStopHardReset, b1 IRSignal
+  //PORTD = B00000010; //b2 is PULLUP
+  pinMode(38, OUTPUT);
+  digitalWrite(38, LOW);
   DDRC = DDRC | B00000000; //30, 31, 32, 33, 34, 35, 36, 37 all inputs
   PORTC = B00000000; //supposed to assign C to LOW ****PORTC NOT BEING USED*********
   DDRB = DDRB | B00000000; //13, 12, 11, 10, 50, 51, 52 ,53 all inputs
@@ -95,11 +97,18 @@ void setup()
   //pinMode(18, INPUT_PULLUP);
   //attachInterrupt(5, pusherStateMachine, FALLING);
   pinMode(2, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);
   digitalWrite(2, HIGH);
   digitalWrite(3, HIGH);
-  pinMode(3, INPUT_PULLUP);
+  pinMode(20, INPUT_PULLUP);
+  digitalWrite(20, HIGH);
+  pinMode(21, INPUT_PULLUP);
+  digitalWrite(21, HIGH);
+  
   attachInterrupt(0, pusherCanRunFlagL, FALLING);
   attachInterrupt(1, pusherCanRunFlagR, FALLING);
+  attachInterrupt(2, stopBridgeConveyor, FALLING);
+  attachInterrupt(3, stopBridgeStack, FALLING);
 }
 
 void pusherCanRunFlagL() {
@@ -173,15 +182,23 @@ void lowerCarriage() {
 	return;
 }
 void carriageToStack() {
+	Serial.println(PORTK, DEC);
+	if (PORTK == B01111111) {
+		return;
+	}
 	stopBridge();
 	//PORTK = PORTK | B00100000;
 	PORTK = PORTK & B01111111;
 	return;
 }
-void carriageToConveyor() {
+void carriageToConveyor() { 
+	Serial.println(PORTK, DEC);
+	if (PORTK == B11011111) {
+		return;
+	}
 	stopBridge();
 	//PORTK = PORTK | B10000000;
-	PORTD = B00001000;
+	//PORTD = B00001000;
 	PORTK = PORTK & B11011111;
 	return;
 }
@@ -190,9 +207,35 @@ void carriageToConveyor() {
 something started glitching when the while loop and millis was being used
 or when the calls to stopBridge were made in toCoveyor and toStack
 but i think mostly its the while loop*/
+void stopBridgeStack() {
+	PORTK = PORTK | B10000000;
+	return;
+}
+void stopBridgeConveyor() {
+	PORTK = PORTK | B00100000;
+	return;
+}
 void stopBridge() {
+	Serial.println(PORTD, DEC);
+	intializeStopBridge = millis();
 	PORTK = PORTK | B10100000;
-	delay(750);
+	while (millis() - intializeStopBridge <= bridgeStopDelay) {
+	}
+	//if (digitalRead(21) == LOW) {
+		//Serial.println("Bridge At Stack");
+		//return;
+	//}
+	if (digitalRead(20) == LOW) {
+		Serial.println("Bridge At Conveyor");
+		return;
+	}
+	if (digitalRead(20) == LOW && digitalRead(21) == LOW) {
+		Serial.println("Sensor Malfunction - adjust switch");
+		return;
+	}
+	else {
+		Serial.println("Bridge in transit");
+	}
 	return;
 }
 
@@ -202,20 +245,24 @@ void EStop()
 	returnStatePinReadK = (PINK);  //saves state of motors, relays for returning after EStop
 	PORTF = B01111111; // EStop relay engaged
 	PORTK = PORTK | B10100000; // Stop forward or reverse bridge motor
-	PORTD = B10000000; // EStop beacon LIT
+	//PORTD = B10000000; // EStop beacon LIT
+	digitalWrite(38, HIGH);
 	while (PINB < 128) {
 		Serial.println("EStop hard button entered EStop Mode");
 	}
 	while (PINB >= 128) {
 		Serial.println("EStop remote button exiting EStop Mode");
-		PORTD = B00000000; // EStop beacon out for exitingEStop flashing
+		//PORTD = B00000000; // EStop beacon out for exitingEStop flashing
+		digitalWrite(38, LOW);
 		Serial.println("breaking out of EStop");
 		exitingEStop();
 		return;
 	}
-}void exitingEStop() // flashed EStop beacon and chirp alarm for 5 seconds
+}
+void exitingEStop() // flashed EStop beacon and chirp alarm for 5 seconds
 {
-	PORTD = B10000000;
+	//PORTD = B10000000;
+	digitalWrite(38, HIGH);
 	delay(25);
 	Serial.println("hard e stop reached");
 	Serial.println(PIND);
@@ -233,9 +280,11 @@ void EStop()
   Serial.println("exiting E Stop mode");
   //below for loop can display strobe and beeper for exiting EStop mode notification
   for (int i = 0; i <= 10; i++) {
-    PORTD = B10000000;
+    //PORTD = B10000000;
+	  digitalWrite(38, HIGH);
     delay(250);
-    PORTD = B00000000;
+    //PORTD = B00000000;
+	digitalWrite(38, LOW);
     delay(250);
   }
   // PORTD = B00100000;
@@ -335,24 +384,24 @@ void translateIR() // takes action based on IR code received
   case 0xFF906: Serial.println(" RAISE Carriage");
 	  raiseCarriage();
 	  break; }
-  case 0xC101E57B: Serial.println(" Release Vacuum"); break;
-  case 0xFF6897: Serial.println(" Release Vacuum"); break;
-  case 0xFF689: Serial.println(" Release Vacuum"); break;
-  case 0x97483BFB: Serial.println(" Arrows"); break;
-  case 0xFF9867: Serial.println(" Arrows"); break;
-  case 0xFF986: Serial.println(" Arrows"); break;
-  case 0xF0C41643: Serial.println(" U/SD"); break;
-  case 0xFFB04F: Serial.println(" U/SD"); break;
-  case 0xFFB04: Serial.println(" U/SD"); break;
-  case 0x9716BE3F: Serial.println(" 1"); break;
-  case 0xFF30CF: Serial.println(" 1"); break;
-  case 0xFF30C: Serial.println(" 1"); break;
-  case 0xFF18E7: Serial.println(" 2"); break;
-  case 0xFF18E: Serial.println(" 2"); break;
-  case 0x3D9AE3F7: Serial.println(" 2"); break;
-  case 0x6182021B: Serial.println(" 3"); break;
-  case 0xFF7A85: Serial.println(" 3"); break;
-  case 0xFF7A8: Serial.println(" 3"); break;
+  case 0xC101E57B: Serial.println(" PushPlate To"); break;
+  case 0xFF6897: Serial.println(" PushPlate To"); break;
+  case 0xFF689: Serial.println(" PushPlate To"); break;
+  case 0x97483BFB: Serial.println(" Release Vacuum"); break;
+  case 0xFF9867: Serial.println(" Release Vacuum"); break;
+  case 0xFF986: Serial.println(" Release Vacuum"); break;
+  case 0xF0C41643: Serial.println(" Activate All Vacuum"); break;
+  case 0xFFB04F: Serial.println(" Activate All Vacuum"); break;
+  case 0xFFB04: Serial.println(" Activate All Vacuum"); break;
+  case 0x9716BE3F: Serial.println(" Drop Pusher"); break;
+  case 0xFF30CF: Serial.println(" Drop Pusher"); break;
+  case 0xFF30C: Serial.println(" Drop Pusher"); break;
+  case 0xFF18E7: Serial.println(" Activate Left Vacuum"); break;
+  case 0xFF18E: Serial.println(" Activate Left Vacuum"); break;
+  case 0x3D9AE3F7: Serial.println(" Activate Left Vacuum"); break;
+  case 0x6182021B: Serial.println(" Activate Right Vacuum"); break;
+  case 0xFF7A85: Serial.println(" Activate Right Vacuum"); break;
+  case 0xFF7A8: Serial.println(" Activate Right Vacuum"); break;
   case 0x8C22657B: {
 	  Serial.println(" stop chain");
 	  //stopChain();
@@ -389,15 +438,15 @@ void translateIR() // takes action based on IR code received
   case 0xFF5AA: Serial.println(" reverse chain");
 	  reverseChain();
 	  break; }
-  case 0x32C6FDF7: Serial.println(" 7"); break;
-  case 0xFF42BD: Serial.println(" 7"); break;
-  case 0xFF42B: Serial.println(" 7"); break;
-  case 0x1BC0157B: Serial.println(" 8"); break;
-  case 0xFF4AB5: Serial.println(" 8"); break;
-  case 0xFF4AB: Serial.println(" 8"); break;
-  case 0x3EC3FC1B: Serial.println(" 9"); break;
-  case 0xFF52AD: Serial.println(" 9"); break;
-  case 0xFF52A: Serial.println(" 9"); break;
+  case 0x32C6FDF7: Serial.println(" Diagnostics"); break;
+  case 0xFF42BD: Serial.println(" Diagnostics"); break;
+  case 0xFF42B: Serial.println(" Diagnostics"); break;
+  case 0x1BC0157B: Serial.println(" Reset Microcontroller"); break;
+  case 0xFF4AB5: Serial.println(" Reset Microcontroller"); break;
+  case 0xFF4AB: Serial.println(" Reset Microcontroller"); break;
+  case 0x3EC3FC1B: Serial.println(" Enter Manual Pusher Window"); break;
+  case 0xFF52AD: Serial.println(" Enter Manual Pusher Window"); break;
+  case 0xFF52A: Serial.println(" Enter Manual Pusher Window"); break;
     // case 0xFF52AD: Serial.println(" #"); break;
     // case 0xFFFFFFFF: Serial.println(" REPEAT");break; 
   default:
@@ -538,4 +587,10 @@ void loop(){
    EStop();
 }
 
+//#define DETERMINE_PUSHER_STATE 0
+//#define DROP_PUSHER 1
+//#define EXTEND_PUSHER 2
+//#define RETRACT_PUSHERS 3
+//#define RAISE_PUSHERS 4
+//#define HOME_AND_VERIFY_PUSHERS 5
 
