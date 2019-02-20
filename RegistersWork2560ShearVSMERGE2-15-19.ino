@@ -1,7 +1,7 @@
 // Visual Micro is in vMicro>General>Tutorial Mode
 // 
 /*
-    Name:       RegistersWork2560ShearVSMERGE.ino
+    Name:       RegistersWork2560ShearVSMERGE.ino   now ShearWithInterrupts on 2/20/19
     Created:  2/11/2019 1:30PM
     Author:     ACORN\TROY
 */
@@ -52,6 +52,8 @@ void bothVacRelease();
 
 int pusherState = 0;
 bool pusherCanRun = 0;
+int leftRetractTripped = 0;
+int rightRetractTripped = 0;
 int pusherCanRunDelay = 1500; // delay to prevent restarting pusherStateMachine because of chainPosSensor
 int forwardChainInvokedTime = 0;
 int chainPosSensor = 4;
@@ -90,6 +92,27 @@ void setup()
   DDRL = B11000000;
   PORTL = B00111111;
   //PORTC = PORTC | B111111;
+  //pinMode(18, INPUT_PULLUP);
+  //attachInterrupt(5, pusherStateMachine, FALLING);
+  pinMode(2, INPUT_PULLUP);
+  digitalWrite(2, HIGH);
+  digitalWrite(3, HIGH);
+  pinMode(3, INPUT_PULLUP);
+  attachInterrupt(0, pusherCanRunFlagL, FALLING);
+  attachInterrupt(1, pusherCanRunFlagR, FALLING);
+}
+
+void pusherCanRunFlagL() {
+	leftRetractTripped = 1;
+	Serial.println("interrupt worked");
+	//pusherState = 3;
+	return;
+}
+void pusherCanRunFlagR() {
+	rightRetractTripped = 1;
+	Serial.println("interrupt worked");
+	//pusherState = 3;
+	return;
 }
 void IR()
 {
@@ -116,14 +139,23 @@ void reverseChain() {
 	return;
 }
 void forwardChain() {
-	PORTF = PORTF & B11111011;
+	PORTF = PORTF & B11111011; 
 	forwardChainInvokedTime = millis();
-	while(millis() < forwardChainInvokedTime + pusherCanRunDelay){
-		pusherCanRun = 0;
+	while(millis() - forwardChainInvokedTime <= pusherCanRunDelay){
+		
 	}
 		pusherCanRun = 1;
 		return;
 }
+//void forwardChain() {
+	//PORTF = PORTF & B11111011;  // turn forward relay on
+	//forwardChainInvokedTime = millis();
+	//while (millis() < forwardChainInvokedTime + pusherCanRunDelay) {
+	//	pusherCanRun = 0;
+	//}
+	//pusherCanRun = 1;
+	//return;
+//}
 void stopChain() {
 		if (PING >= 32 && pusherCanRun == 1) {
 			pusherStateMachine();
@@ -390,131 +422,120 @@ void checkChainMotor() {
 */
 
 
-void pusherStateMachine() {
-	if (pusherCanRun == 0) { return; }
-	PORTF = PORTF | B00001100;
-  switch (pusherState)
-  {
-    Serial.println(PING);
-  case VERIFY_PUSHER_STATE:
-    Serial.print("pusherStateMachine reached..... State is---  ");
-    Serial.println(pusherState);
-	Serial.print("PING is reading ");
-	Serial.println(PING);
-    //if (PINB == 0) { 
-		//Serial.println(PINB);
-      //break; }
-    if (pusherState == 0) {
-      pusherState++;
-      PORTF = PORTF | B00110000; //stop chain???
-      
-      Serial.print("0 pusherState was verified..... State is---  ");
-      Serial.println(pusherState);
-    }
-    else {
-    }
-  case DROP_PUSHER:
-    PORTF = PORTF & B11111110; //drop valve triggered
-    while (PINL != 60) {
-    }
-    if (PINL == 60) {
-      pusherState++;
-      Serial.print("Pushers are DROPPED... PusherState is... ");
-      Serial.println(pusherState);
-    }
-    else {
-      return;
-    }
-  case EXTEND_PUSHER:
-    PORTF = PORTF & B11111100;
-    Serial.print("Pushers are Extending... Pushers are Extending");
-	Serial.println(PINL);
-    while (PINL != 48) {  //probably NOT NEEDED
-		
-		if (irrecv.decode(&results)) // have we received an IR signal?
-		{
-			Serial.println(results.value);
-			if (results.value == 0xF076C13B) { 
-				pusherState + 2;
-				PORTF = PORTF | B00000010;
-				//return;
+void pusherStateMachine()
+{
+	if (pusherCanRun == 0) {
+		return;
+	}
+	else {
+		PORTF = PORTF | B00001100;
+	}
+
+	switch (pusherState)
+	{
+
+		Serial.println(PING);
+	case VERIFY_PUSHER_STATE:
+		Serial.print("pusherStateMachine reached..... State is---  ");
+		Serial.println(pusherState);
+		Serial.print("PING is reading ");
+		Serial.println(PING);
+		//if (PINB == 0) { 
+			//Serial.println(PINB);
+		  //break; }
+		if (pusherState == 0) {
+			pusherState++;
+			PORTF = PORTF | B00110000; //stop chain???
+
+			Serial.print("0 pusherState was verified..... State is---  ");
+			Serial.println(pusherState);
+		}
+		else {
+		}
+	case DROP_PUSHER:
+		PORTF = PORTF & B11111110; //drop valve triggered
+		while (PINL != 60) {
+		}
+		if (PINL == 60) {
+			pusherState++;
+			Serial.print("Pushers are DROPPED... PusherState is... ");
+			Serial.println(pusherState);
+		}
+		else {
+			return;
+		}
+	case EXTEND_PUSHER:
+		PORTF = PORTF & B11111100;
+		Serial.print("Pushers are Extending... Pushers are Extending");
+		Serial.println(PINL);
+		while (PINL != 48) {  //probably NOT NEEDED
+
+			if (irrecv.decode(&results)) // have we received an IR signal?
+			{
+				Serial.println(results.value);
+				if (results.value == 0xF076C13B) {
+					pusherState + 2;
+					PORTF = PORTF | B00000010;
+					//return;
+				}
 			}
 		}
-    }
-    if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
-      PORTF = PORTF | B00000010;  // this sets retraction to happen
-      Serial.print("Pushers are Retracting... Pushers are Retracting");
-      pusherState = pusherState + 1;
-      Serial.print("PusherState is... ");
-      Serial.println(pusherState);
-    }
-  case RETRACT_PUSHERS:
-    Serial.println("retract was reached");
-    Serial.println(PINL);
-    if (PINL == 12) {
-      pusherState++;
-      Serial.println("both retract sensors triggered");
-      //return;
-    }
-    if (PINL <= 28) {
-      Serial.println("<= 28 reached");
-      while (PINL != 44) {
-        Serial.println("not 44 or 36 reached");
-        Serial.println(PINL);
-      }
-      pusherState++;
-      Serial.println("both retract sensors triggered");
-      return;
-    }
-    if (PINL == 44 || PINL == 36) { // THIS IF STATEMENT WORKS
-      while (PINL > 28) {
-        Serial.println(PINL);
-      }
-      pusherState++;
-      Serial.println("both retract sensors triggered");
-      return;
-    }
-    else { return; }
-  case RAISE_PUSHERS:
-    Serial.println("Raise Pushers REACHED");
-    PORTF = PORTF | B00000011;
-    pusherState++;
-    
-  case HOME_AND_VERIFY_PUSHERS:
-	  pusherCanRun = 0;
-    while (PINL != 63) {
-        Serial.println("waiting for pushers to HOME");
-        Serial.println(PINL);
-      }
-    pusherState = 0;
-    //checkChainMotor();
-	Serial.println("breaking out of pusherStateMachine");
-    break;
-    }
-  }
+		if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
+			PORTF = PORTF | B00000010;  // this sets retraction to happen
+			Serial.print("Pushers are Retracting... Pushers are Retracting");
+			pusherState = pusherState + 1;
+			Serial.print("PusherState is... ");
+			Serial.println(pusherState);
+		}
+	case RETRACT_PUSHERS:
+		Serial.println("retract was reached");
+		if ((leftRetractTripped + rightRetractTripped) == 2) {
+			pusherState++;
+			Serial.println("exiting retract");
+		}
+		else {
+			return;
+		}
 
+	case RAISE_PUSHERS:
+		Serial.println("Raise Pushers REACHED");
+		leftRetractTripped = 0;
+		rightRetractTripped = 0;
+		PORTF = PORTF | B00000011;
+		pusherState++;
+
+	case HOME_AND_VERIFY_PUSHERS:
+		pusherCanRun = 0;
+		while (PINL != 63) {
+			Serial.println("waiting for pushers to HOME");
+			Serial.println(PINL);
+		}
+		pusherState = 0;
+		//checkChainMotor();
+		Serial.println("breaking out of pusherStateMachine");
+		Serial.println(leftRetractTripped);
+		Serial.println(rightRetractTripped);
+		Serial.println(pusherCanRun);
+		loop();
+
+	}
+}
 
 
 // Add the main program code into the continuous loop() function
-void loop()
-{
+void loop(){
 	Serial.println(PING);
-  while (PINB < 128) {
+  while (PINB < 128) {   //while EStop Button is not engaged
     IR();
     if (PING >= 32 & pusherCanRun == 1) {  
         pusherStateMachine();
         Serial.println(PINL);
     }
-    else {
+    //else {
       //checkChainMotor();
-    }
+    //}
   }
    EStop();
 }
 
-//#define DETERMINE_PUSHER_STATE 0
-//#define DROP_PUSHER 1
-//#define EXTEND_PUSHER 2
-//#define RETRACT_PUSHERS 3
-//#define RAISE_PUSHERS 4
-//#define HOME_AND_VERIFY_PUSHERS 5
+
