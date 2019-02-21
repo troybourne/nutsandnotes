@@ -144,7 +144,6 @@ void reverseChain() {
 	if (PINF == B11110111) {
 		return;
 	}
-	stopChain();
 	PORTF = PORTF | B00001100;
 	PORTF = PORTF & B11110111;
 	pusherCanRun = 1;
@@ -561,7 +560,12 @@ void pusherStateMachine()
 			Serial.println(PINL);
 		}
 		pusherState = 0;
-		forwardChain();
+		//if (steelOnChainsL == 0 && steelonChainsR == 0) {
+			//forwardChain();
+		//}
+		//else {
+			forwardChain();
+		//}
 		//checkChainMotor();
 		Serial.println("breaking out of pusherStateMachine");
 		Serial.println("pusherCanRun equals ");
@@ -571,34 +575,3 @@ void pusherStateMachine()
 
 	}
 }
-
-
-// Add the main program code into the continuous loop() function
-void loop(){
-	bool eStopPin = PINB & (1<<7);
-	bool chainSensorPin = PING & (1 << 5);
-	//Serial.println(PINB);
-	//Serial.println(eStopPin);
-  while (eStopPin == 0) {   //while  (PINB < 128) EStop Button is not engaged
-    IR();
-	//Serial.println(chainSensorPin);
-    if (chainSensorPin ==0 & pusherCanRun == 1) {  
-        pusherStateMachine();
-        Serial.println(PINL);
-		return;
-    }
-    else {
-		return;
-    }
-  }
-   EStop();
-}
-
-//#define DETERMINE_PUSHER_STATE 0
-//#define DROP_PUSHER 1
-//#define EXTEND_PUSHER 2
-//#define RETRACT_PUSHERS 3
-//#define RAISE_PUSHERS 4
-//#define HOME_AND_VERIFY_PUSHERS 5
-
-
