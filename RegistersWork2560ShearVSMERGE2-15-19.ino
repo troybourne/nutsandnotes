@@ -9,7 +9,8 @@
 // Define User Types below here or use a .h file
 #include "IRremote.h"
 //
-
+//TO DO NOTES... limit movement of toStack and toConveyor to when carriage is up***********************
+//TO DO NOTES... current sensor will need an analog so convert PORTF or K over to PORTC
 // Define Function Prototypes that use User Types below here or use a .h file
 void IR();
 void exitingEStop();
@@ -54,7 +55,7 @@ int pusherState = 0;
 bool pusherCanRun = 0;
 bool leftRetractTripped = 0;
 bool rightRetractTripped = 0;
-int pusherCanRunDelay = 1500; // delay to prevent restarting pusherStateMachine because of chainPosSensor
+int pusherCanRunDelay = 2500; // delay to prevent restarting pusherStateMachine because of chainPosSensor
 int forwardChainInvokedTime = 0;
 int chainPosSensor = 4;
 int returnStatePinReadF = 0;
@@ -105,22 +106,24 @@ void setup()
   pinMode(21, INPUT_PULLUP);
   digitalWrite(21, HIGH);
   
-  attachInterrupt(0, pusherCanRunFlagL, FALLING);
-  attachInterrupt(1, pusherCanRunFlagR, FALLING);
-  attachInterrupt(2, stopBridgeConveyor, FALLING);
-  attachInterrupt(3, stopBridgeStack, FALLING);
+  attachInterrupt(0, pusherCanRaiseFlagL, FALLING);
+  attachInterrupt(1, pusherCanRaiseFlagR, FALLING);
+  attachInterrupt(2, stopBridgeAtConveyor, FALLING);
+  attachInterrupt(3, stopBridgeAtStack, FALLING);
 }
 
-void pusherCanRunFlagL() {
+void pusherCanRaiseFlagL() {
 	leftRetractTripped = 1;
 	Serial.println("interrupt worked");
 	//pusherState = 3;
+	//pusherStateMachine();
 	return;
 }
-void pusherCanRunFlagR() {
+void pusherCanRaiseFlagR() {
 	rightRetractTripped = 1;
 	Serial.println("interrupt worked");
 	//pusherState = 3;
+	//pusherStateMachine();
 	return;
 }
 void IR()
@@ -144,7 +147,7 @@ void reverseChain() {
 	stopChain();
 	PORTF = PORTF | B00001100;
 	PORTF = PORTF & B11110111;
-	//pusherCanRun = 1;
+	pusherCanRun = 1;
 	return;
 }
 void forwardChain() {
@@ -207,11 +210,11 @@ void carriageToConveyor() {
 something started glitching when the while loop and millis was being used
 or when the calls to stopBridge were made in toCoveyor and toStack
 but i think mostly its the while loop*/
-void stopBridgeStack() {
+void stopBridgeAtStack() {
 	PORTK = PORTK | B10000000;
 	return;
 }
-void stopBridgeConveyor() {
+void stopBridgeAtConveyor() {
 	PORTK = PORTK | B00100000;
 	return;
 }
@@ -473,11 +476,11 @@ void checkChainMotor() {
 
 void pusherStateMachine()
 {
-	if (pusherCanRun == 0) {
+	if (pusherCanRun != 1) {
 		return;
 	}
 	else {
-		PORTF = PORTF | B00001100;
+		PORTF = PORTF | B00001100;  //stops the chain whether in forward or reverse
 	}
 
 	switch (pusherState)
@@ -485,13 +488,6 @@ void pusherStateMachine()
 
 		Serial.println(PING);
 	case VERIFY_PUSHER_STATE:
-		Serial.print("pusherStateMachine reached..... State is---  ");
-		Serial.println(pusherState);
-		Serial.print("PING is reading ");
-		Serial.println(PING);
-		//if (PINB == 0) { 
-			//Serial.println(PINB);
-		  //break; }
 		if (pusherState == 0) {
 			pusherState++;
 			PORTF = PORTF | B00110000; //stop chain???
@@ -532,18 +528,23 @@ void pusherStateMachine()
 		if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
 			PORTF = PORTF | B00000010;  // this sets retraction to happen
 			Serial.print("Pushers are Retracting... Pushers are Retracting");
-			pusherState = pusherState + 1;
+			pusherState++;
 			Serial.print("PusherState is... ");
 			Serial.println(pusherState);
 		}
 	case RETRACT_PUSHERS:
 		Serial.println("retract was reached");
 		if ((leftRetractTripped + rightRetractTripped) == 2) {
-			pusherState++;
 			Serial.println("exiting retract");
+			pusherState++;
 		}
 		else {
-			return;
+			while ((leftRetractTripped + rightRetractTripped) != 2) {
+				Serial.println(leftRetractTripped);
+				Serial.println(rightRetractTripped);
+			}
+			Serial.println("exiting retract");
+			pusherState++;
 		}
 
 	case RAISE_PUSHERS:
@@ -560,10 +561,11 @@ void pusherStateMachine()
 			Serial.println(PINL);
 		}
 		pusherState = 0;
+		forwardChain();
 		//checkChainMotor();
 		Serial.println("breaking out of pusherStateMachine");
-		Serial.println(leftRetractTripped);
-		Serial.println(rightRetractTripped);
+		Serial.println("pusherCanRun equals ");
+		Serial.print(pusherCanRun);
 		Serial.println(pusherCanRun);
 		loop();
 
@@ -573,16 +575,21 @@ void pusherStateMachine()
 
 // Add the main program code into the continuous loop() function
 void loop(){
-	Serial.println(PING);
-  while (PINB < 128) {   //while EStop Button is not engaged
+	bool eStopPin = PINB & (1<<7);
+	bool chainSensorPin = PING & (1 << 5);
+	//Serial.println(PINB);
+	//Serial.println(eStopPin);
+  while (eStopPin == 0) {   //while  (PINB < 128) EStop Button is not engaged
     IR();
-    if (PING >= 32 & pusherCanRun == 1) {  
+	//Serial.println(chainSensorPin);
+    if (chainSensorPin ==0 & pusherCanRun == 1) {  
         pusherStateMachine();
         Serial.println(PINL);
+		return;
     }
-    //else {
-      //checkChainMotor();
-    //}
+    else {
+		return;
+    }
   }
    EStop();
 }
@@ -593,4 +600,5 @@ void loop(){
 //#define RETRACT_PUSHERS 3
 //#define RAISE_PUSHERS 4
 //#define HOME_AND_VERIFY_PUSHERS 5
+
 
