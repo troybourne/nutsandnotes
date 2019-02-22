@@ -150,6 +150,7 @@ void reverseChain() {
 	return;
 }
 void forwardChain() {
+	PORTF = PORTF | B00001100;
 	PORTF = PORTF & B11111011; 
 	forwardChainInvokedTime = millis();
 	while(millis() - forwardChainInvokedTime <= pusherCanRunDelay){
@@ -203,6 +204,18 @@ void carriageToConveyor() {
 	//PORTD = B00001000;
 	PORTK = PORTK & B11011111;
 	return;
+}
+void leftVacActivated() {
+	PORTK = PORTK & B11101111;
+}
+void rightVacActivated() {
+	PORTK = PORTK & B11111011;
+}
+void releaseAllVac() {
+	//if (carriaAtTop == LOW) {
+	//	return;
+	//}
+	PORTK = PORTK | B00010100;
 }
 
 /*
@@ -389,21 +402,49 @@ void translateIR() // takes action based on IR code received
   case 0xC101E57B: Serial.println(" PushPlate To"); break;
   case 0xFF6897: Serial.println(" PushPlate To"); break;
   case 0xFF689: Serial.println(" PushPlate To"); break;
-  case 0x97483BFB: Serial.println(" Release Vacuum"); break;
-  case 0xFF9867: Serial.println(" Release Vacuum"); break;
-  case 0xFF986: Serial.println(" Release Vacuum"); break;
-  case 0xF0C41643: Serial.println(" Activate All Vacuum"); break;
+  case 0x97483BFB: Serial.println(" Release Vacuum"); 
+	  //if (carriageAtTop == LOW) {
+		  //return;
+	  //}
+	  releaseAllVac(); 
+	  break;
+  case 0xFF9867: Serial.println(" Release Vacuum"); 
+	  //if (carriageAtTop == LOW) {
+		  //return;
+	  //}
+	  releaseAllVac(); 
+	  break;
+  case 0xFF986: Serial.println(" Release Vacuum"); 
+	  //if (carriageAtTop == LOW) {
+		  //return;
+	  //}
+	  releaseAllVac();
+	  break;
+  case 0xF0C41643: {Serial.println(" Activate All Vacuum"); break;
   case 0xFFB04F: Serial.println(" Activate All Vacuum"); break;
-  case 0xFFB04: Serial.println(" Activate All Vacuum"); break;
-  case 0x9716BE3F: Serial.println(" Drop Pusher"); break;
+  case 0xFFB04: Serial.println(" Activate All Vacuum"); break; }
+  case 0x9716BE3F: {Serial.println(" Drop Pusher"); break;
   case 0xFF30CF: Serial.println(" Drop Pusher"); break;
-  case 0xFF30C: Serial.println(" Drop Pusher"); break;
-  case 0xFF18E7: Serial.println(" Activate Left Vacuum"); break;
-  case 0xFF18E: Serial.println(" Activate Left Vacuum"); break;
-  case 0x3D9AE3F7: Serial.println(" Activate Left Vacuum"); break;
-  case 0x6182021B: Serial.println(" Activate Right Vacuum"); break;
-  case 0xFF7A85: Serial.println(" Activate Right Vacuum"); break;
-  case 0xFF7A8: Serial.println(" Activate Right Vacuum"); break;
+  case 0xFF30C: Serial.println(" Drop Pusher"); break; }
+  case 0xFF18E7: { Serial.println(" Activate Left Vacuum");
+	  leftVacActivated();
+	  break;
+  case 0xFF18E: Serial.println(" Activate Left Vacuum");
+	  leftVacActivated();
+	  break;
+  case 0x3D9AE3F7: Serial.println(" Activate Left Vacuum");
+	  leftVacActivated();
+	  break;
+  }
+  case 0x6182021B: {Serial.println(" Activate Right Vacuum");
+	  rightVacActivated();
+	  break;
+  case 0xFF7A85: Serial.println(" Activate Right Vacuum");
+	  rightVacActivated();
+	  break;
+  case 0xFF7A8: Serial.println(" Activate Right Vacuum");
+	  rightVacActivated();
+	  break; }
   case 0x8C22657B: {
 	  Serial.println(" stop chain");
 	  //stopChain();
@@ -575,3 +616,32 @@ void pusherStateMachine()
 
 	}
 }
+
+
+// Add the main program code into the continuous loop() function
+void loop(){
+	bool eStopPin = PINB & (1<<7);
+	bool chainSensorPin = PING & (1 << 5);
+	//Serial.println(PINB);
+	//Serial.println(eStopPin);
+  while (eStopPin == 0) {   //while  (PINB < 128) EStop Button is not engaged
+    IR();
+	//Serial.println(chainSensorPin);
+    if (chainSensorPin ==0 & pusherCanRun == 1) {  
+        pusherStateMachine();
+        Serial.println(PINL);
+		return;
+    }
+    else {
+		return;
+    }
+  }
+   EStop();
+}
+
+//#define DETERMINE_PUSHER_STATE 0
+//#define DROP_PUSHER 1
+//#define EXTEND_PUSHER 2
+//#define RETRACT_PUSHERS 3
+//#define RAISE_PUSHERS 4
+//#define HOME_AND_VERIFY_PUSHERS 5
