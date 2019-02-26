@@ -2,7 +2,7 @@
 // 
 /*
     Name:       RegistersWork2560ShearVSMERGE.ino
-    Created:  2/11/2019 1:30PM
+    Created:  2/11/2019 1:30PM                      END OF DAY ON 2/26/2019
     Author:     ACORN\TROY
 */
 
@@ -99,17 +99,15 @@ void setup()
   PORTA = B11111111;
   //pinMode(18, INPUT_PULLUP);
   //attachInterrupt(5, pusherStateMachine, FALLING);
-  pinMode(2, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
+  pinMode(2, INPUT_PULLUP); // retracting pass proximity sensor for interrupt
+  pinMode(3, INPUT_PULLUP); // retracting pass proximity sensor for interrupt
   digitalWrite(2, HIGH);
   digitalWrite(3, HIGH);
-  pinMode(20, INPUT_PULLUP);
-  digitalWrite(20, HIGH);
+  pinMode(20, INPUT_PULLUP);  //at stack interrupt to stop bridge motor
+  digitalWrite(20, HIGH);     //at conveyor interrupt to stop bridge motor
   pinMode(21, INPUT_PULLUP);
   digitalWrite(21, HIGH);
 
-  
-  
   attachInterrupt(0, pusherCanRaiseFlagL, FALLING);
   attachInterrupt(1, pusherCanRaiseFlagR, FALLING);
   attachInterrupt(2, stopBridgeAtConveyor, FALLING);
@@ -692,27 +690,66 @@ void manualMode(){
   // EStop();
 }
 
-void loop() {
-	while (PINB <= 127) {
-		if (PINB < 96) {
-			Serial.println("limited to manual mode because not 2 sheets on rack");
-			manualMode();
-			return;
+void deliverSteel() {
+	while (PINA >= 192) {
+		//if vacuum is established
+	//if carriageAtConveyor; wait on pusherStateMachine
+	//else if carriageAtTop > carriageToConveyor()
+	//else raiseCarriage();carriageToConveyor();wait on pusherStateMachine()
+		Serial.println("Deliver Steel reached ");
+		if (PINA > 224 & digitalRead(21) == LOW) {
+
+			Serial.println("Ready to Drop ");
+			Serial.println("Moving to Conveyor ");
+			Serial.println("Raising Bridge ");
+			Serial.println("Waiting to Release Vacuum");
 		}
-		if (PINB >= 112) {
-			Serial.println("Manual Mode ");
-			Serial.println(PINA);
-			manualMode();
-			
+	}
+}
+
+	void getSteel() {
+		//if vacuum is not established
+		//if carriageAtConveyor > raiseCarriage(); 
+		//if carriageAtTop > carriageToStack();
+		//if carriageAtStack > lowerCarriage(); bothVacActivated();
+		Serial.println("Get steel is reached ");
+	}
+
+	void autoMode() {
+		if (PINA >= 192) { //if vacuum is established
+			deliverSteel();
+			IR();
 		}
 		else {
-			Serial.println("Auto Mode ");
-			Serial.println(PINA);
+			getSteel();
 			IR();
 		}
 	}
-	EStop();
-}
+
+
+	void loop() {
+		while (PINB <= 127) {
+			if (PINB < 96) {
+				Serial.println("limited to manual mode because not 2 sheets on rack");
+				manualMode();
+				return;
+			}
+			if (PINB >= 112) {
+				Serial.println("Manual Mode ");
+				Serial.println(PINA);
+				manualMode();
+
+			}
+			else {
+				Serial.println("Auto Mode ");
+				Serial.println(PINA);
+				autoMode();
+				IR();
+			}
+		}
+		EStop();
+	}
+
 
 //#define DETERMINE_PUSHER_STATE 0
 //#define DROP_PUSHER 1
