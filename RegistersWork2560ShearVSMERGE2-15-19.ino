@@ -2,7 +2,7 @@
 // 
 /*
     Name:       RegistersWork2560ShearVSMERGE.ino
-    Created:  2/11/2019 1:30PM                      END OF DAY ON 2/26/2019
+    Created:  2/11/2019 1:30PM
     Author:     ACORN\TROY
 */
 
@@ -27,6 +27,11 @@ void leftVacEngage();
 void rightVacEngage();
 void bothVacEngage();
 void bothVacRelease();
+void autoCarriageToConveyor();
+void pusherStateMachine();
+void autoPusherStateMachine();
+void getSteel();
+void deliverSteel();
 // Define Functions below here or use other .ino or cpp files
 //
 // The setup() function runs once each time the micro-controller starts
@@ -52,7 +57,11 @@ void bothVacRelease();
 #define RAISE_PUSHERS 4
 #define HOME_AND_VERIFY_PUSHERS 5
 
+#define HEAD_TO_STACK 0
+#define CARRIAGE_AT_STACK 1
+
 int pusherState = 0;
+int getSteelState = 1;
 bool pusherCanRun = 0;
 bool leftRetractTripped = 0;
 bool rightRetractTripped = 0;
@@ -63,19 +72,25 @@ int returnStatePinReadC = 0;
 int returnStatePinReadK = 0;
 int bridgeStopDelay = 1000;
 int intializeStopBridge = 0;
+int carriageAtConveyor = 21;
+int carriageAtStack = 20;
+int carriageAtTop = 27;
+bool eStopPin = PINB & (1 << 7);
+bool chainSensorPin = PING & (1 << 5); //digital pin 4
+//int chainSensorPin = 4;
+int gettingSteelState = 0;
 
-int receiver = 14; // pin 1 of IR receiver to Arduino digital pin 11
+int receiver = 14; // pin 1 of IR receiver to Arduino digital pin 14
 IRrecv irrecv(receiver); // create instance of 'irrecv'
 decode_results results; // create instance of 'decode_results'
-bool carriageAtTop = PINA & (1 << 5);
+//bool carriageAtTop = PINA & (1 << 5);
 
 // DDR(bank) - 1 is to assign an output, 0 is an input
 // PORT(bank) - if output then 0 is LOW and 1 is high; if input then then 1 is INPUT_PULLUP and 0 is no pullup enabled
 // PIN(bank) - reads the value of that register
 
 void setup()
-{
-	
+{	
 	pinMode(chainPosSensor, INPUT_PULLUP);
 	digitalWrite(chainPosSensor, HIGH);
   Serial.begin(115200);
@@ -120,14 +135,14 @@ void chooseMode() {
 
 void pusherCanRaiseFlagL() {
 	leftRetractTripped = 1;
-	Serial.println("interrupt worked");
+	//Serial.println("interrupt worked");
 	//pusherState = 3;
 	//pusherStateMachine();
 	return;
 }
 void pusherCanRaiseFlagR() {
 	rightRetractTripped = 1;
-	Serial.println("interrupt worked");
+	//Serial.println("interrupt worked");
 	//pusherState = 3;
 	//pusherStateMachine();
 	return;
@@ -137,8 +152,8 @@ void IR()
   //Serial.println("main loop has been reached");
   if (irrecv.decode(&results)) // have we received an IR signal?
   {
-    Serial.print(F("result = 0x"));
-    Serial.println(results.value, HEX); //UN Comment to see raw values
+    //Serial.print(F("result = 0x"));
+    //Serial.println(results.value, HEX); //UN Comment to see raw values
     translateIR();
     irrecv.resume(); // receive the next value
   }
@@ -191,8 +206,8 @@ void lowerCarriage() {
 	return;
 }
 void carriageToStack() {
-	if (digitalRead(27) == LOW) {
-		Serial.println(PORTK, DEC);
+	if (digitalRead(carriageAtTop) == 0) {
+		Serial.println("carriage to stack");
 		if (PORTK == B01111111) {
 			return;
 		}
@@ -203,12 +218,28 @@ void carriageToStack() {
 	}
 }
 void carriageToConveyor() { 
-	if (digitalRead(27) == LOW) {
+	if (digitalRead(carriageAtTop) == 0) {
 		Serial.println(PORTK, DEC);
 		if (PORTK == B11011111) {
 			return;
 		}
 		stopBridge();
+		//PORTK = PORTK | B10000000;
+		//PORTD = B00001000;
+		PORTK = PORTK & B11011111;
+		return;
+	}
+}
+void autoCarriageToConveyor() {
+	//Serial.println("PINA is reading ");
+	//Serial.println(PINA);
+	//Serial.println("PINK is reading ");
+	//Serial.println(PINK);
+		//if (PINA <= B11011111) {
+		//	Serial.println(PINA);
+		//	return;
+		//}
+		if (PINA == 224 && digitalRead(carriageAtConveyor) == 1){
 		//PORTK = PORTK | B10000000;
 		//PORTD = B00001000;
 		PORTK = PORTK & B11011111;
@@ -377,36 +408,36 @@ void translateIR() // takes action based on IR code received
 		stopBridge();
 		break; }
 	case 0xD7E84B1B: { Serial.println(" To Conveyor");
-		if (digitalRead(27) == LOW) {
+		if (digitalRead(carriageAtTop) == LOW) {
 			carriageToConveyor();
 		}
 		break;
 	case 0xFF02FD: Serial.println(" To Conveyor");
-		if (digitalRead(27) == LOW) {
+		if (digitalRead(carriageAtTop) == LOW) {
 			carriageToConveyor();
 		}
 		break;
 	case 0xFF02F: Serial.println(" To Conveyor");
-		if (digitalRead(27) == LOW) {
+		if (digitalRead(carriageAtTop) == LOW) {
 			carriageToConveyor();
 		}
 		break; }
 	case 0x20FE4DBB: {Serial.println(" To Stack");
-		if (digitalRead(27) == LOW) {
+		if (digitalRead(carriageAtTop) == LOW) {
 			carriageToStack();
 			PORTD = B00000100;
 			break;
 		}
 		else { break; }
 	case 0xFFC23D: Serial.println(" To Stack");
-		if (digitalRead(27) == LOW) {
+		if (digitalRead(carriageAtTop) == LOW) {
 			carriageToStack();
 			PORTD = B00000100;
 			break;
 		}
 		else { break; }
 	case 0xFFC23: Serial.println(" To Stack");
-		if (digitalRead(27) == LOW) {
+		if (digitalRead(carriageAtTop) == LOW) {
 			carriageToStack();
 			PORTD = B00000100;
 			break;
@@ -564,11 +595,19 @@ void checkChainMotor() {
 
 void pusherStateMachine()
 {
+	Serial.println(carriageAtConveyor);
 	if (pusherCanRun != 1) {
 		return;
 	}
 	else {
 		PORTC = PORTC | B00001100;  //stops the chain whether in forward or reverse
+		if (PINA == 224 && digitalRead(carriageAtConveyor) == 0) {
+			Serial.println("lowering carriage");
+			lowerCarriage(); //comment out for FULL MANUAL MODE
+		}
+		else {
+			Serial.println("carriage not ready with steel... not lowering carriage");
+		}
 	}
 
 	switch (pusherState)
@@ -581,7 +620,7 @@ void pusherStateMachine()
 			PORTC = PORTC | B00110000; //stop chain???
 
 			Serial.print("0 pusherState was verified..... State is---  ");
-			Serial.println(pusherState);
+			//Serial.println(pusherState);
 		}
 		else {
 		}
@@ -592,7 +631,7 @@ void pusherStateMachine()
 		if (PINL == 60) {
 			pusherState++;
 			Serial.print("Pushers are DROPPED... PusherState is... ");
-			Serial.println(pusherState);
+			//Serial.println(pusherState);
 		}
 		else {
 			return;
@@ -600,8 +639,124 @@ void pusherStateMachine()
 	case EXTEND_PUSHER:
 		PORTC = PORTC & B11111100;
 		Serial.print("Pushers are Extending... Pushers are Extending");
-		Serial.println(PINL);
+		//Serial.println(PINL);
 		while (PINL != 48) {  //probably NOT NEEDED
+			if (PINA >= 200) { //bothVacEstablished,carriagedown,steelOnBothChain,carriageOnBothSteel
+				releaseAllVac();
+				//return;
+			}
+			if (irrecv.decode(&results)) // have we received an IR signal?
+			{
+				Serial.println(results.value);
+				if (results.value == 0xF076C13B) { // looking for IR Home the Pusher
+					pusherState + 2;
+					PORTC = PORTC | B00000010;
+					//return;
+				}
+			}
+		}
+		if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
+			PORTC = PORTC | B00000010;  // this sets retraction to happen
+			raiseCarriage();
+			//Serial.print("Pushers are Retracting... Pushers are Retracting");
+			pusherState++;
+			//Serial.print("PusherState is... ");
+			//Serial.println(pusherState);
+		}
+	case RETRACT_PUSHERS:
+		//Serial.println("retract was reached");
+		if ((leftRetractTripped + rightRetractTripped) == 2) {
+			//Serial.println("exiting retract");
+			pusherState++;
+		}
+		else {
+			while ((leftRetractTripped + rightRetractTripped) != 2) {
+				Serial.println(leftRetractTripped);
+				Serial.println(rightRetractTripped);
+			}
+			//Serial.println("exiting retract");
+			pusherState++;
+		}
+
+	case RAISE_PUSHERS:
+		//Serial.println("Raise Pushers REACHED");
+		leftRetractTripped = 0;
+		rightRetractTripped = 0;
+		PORTC = PORTC | B00000011;
+		pusherState++;
+
+	case HOME_AND_VERIFY_PUSHERS:
+		pusherCanRun = 0;
+		while (PINL != 63) {
+			//Serial.println("waiting for pushers to HOME");
+			//Serial.println(PINL);
+		}
+		pusherState = 0;
+		//if (steelOnChainsL == 0 && steelonChainsR == 0) {
+			//forwardChain();
+		//}
+		//else {
+			forwardChain();
+		//}
+		//checkChainMotor();
+		//Serial.println("breaking out of pusherStateMachine");
+		//Serial.println("pusherCanRun equals ");
+		//Serial.print(pusherCanRun);
+		//Serial.println(pusherCanRun);
+			break; 
+
+	}
+}
+void autoPusherStateMachine()
+{
+	if (pusherCanRun != 1) {
+		return;
+	}
+	else {
+		PORTC = PORTC | B00001100;  //stops the chain whether in forward or reverse
+		if (PINA == 224 && digitalRead(carriageAtConveyor) == 0) {
+			//Serial.println("lowering carriage");
+			lowerCarriage(); //comment out for FULL MANUAL MODE
+		}
+		else {
+			//Serial.println("carriage not ready with steel... not lowering carriage");
+		}
+	}
+
+	switch (pusherState)
+	{
+
+	case VERIFY_PUSHER_STATE:
+		if (pusherState == 0) {
+			pusherState++;
+			PORTC = PORTC | B00110000; //stop chain???
+
+			//Serial.print("0 pusherState was verified..... State is---  ");
+			//Serial.println(pusherState);
+		}
+		else {
+		}
+	case DROP_PUSHER:
+		PORTC = PORTC & B11111110; //drop valve triggered
+		while (PINL != 60) {
+		}
+		if (PINL == 60) {
+			pusherState++;
+			//Serial.print("Pushers are DROPPED... PusherState is... ");
+			//Serial.println(pusherState);
+		}
+		else {
+			//return;  //commented out on 2/27/2019 at 12:56pm
+		}
+	case EXTEND_PUSHER:
+		PORTC = PORTC & B11111100;
+		//Serial.print("Pushers are Extending... Pushers are Extending");
+		//Serial.println(PINL);
+		lowerCarriage();  //added for autoPusherStateMachine
+		while (PINL != 48) {  //probably NOT NEEDED
+			if (PINA >= 216 && PINA <= 222) {
+				releaseAllVac();
+			}
 
 			if (irrecv.decode(&results)) // have we received an IR signal?
 			{
@@ -615,10 +770,11 @@ void pusherStateMachine()
 		}
 		if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
 			PORTC = PORTC | B00000010;  // this sets retraction to happen
-			Serial.print("Pushers are Retracting... Pushers are Retracting");
+			//Serial.print("Pushers are Retracting... Pushers are Retracting");
+			PORTK = PORTK & B10111111; //raiseCarriage
 			pusherState++;
-			Serial.print("PusherState is... ");
-			Serial.println(pusherState);
+			//Serial.print("PusherState is... ");
+			//Serial.println(pusherState);
 		}
 	case RETRACT_PUSHERS:
 		Serial.println("retract was reached");
@@ -631,46 +787,45 @@ void pusherStateMachine()
 				Serial.println(leftRetractTripped);
 				Serial.println(rightRetractTripped);
 			}
-			Serial.println("exiting retract");
+			//Serial.println("exiting retract");
 			pusherState++;
 		}
 
 	case RAISE_PUSHERS:
-		Serial.println("Raise Pushers REACHED");
-		leftRetractTripped = 0;
-		rightRetractTripped = 0;
+		//Serial.println("Raise Pushers REACHED");
 		PORTC = PORTC | B00000011;
 		pusherState++;
 
 	case HOME_AND_VERIFY_PUSHERS:
+		leftRetractTripped = 0;
+		rightRetractTripped = 0;
 		pusherCanRun = 0;
 		while (PINL != 63) {
-			Serial.println("waiting for pushers to HOME");
-			Serial.println(PINL);
+			//Serial.println("waiting for pushers to HOME");
+			//Serial.println(PINL);
 		}
-		pusherState = 0;
+
 		//if (steelOnChainsL == 0 && steelonChainsR == 0) {
 			//forwardChain();
 		//}
 		//else {
-			forwardChain();
+		while (digitalRead(carriageAtTop) == 0) {
+		}
+		forwardChain();
+		pusherState = 0;
 		//}
 		//checkChainMotor();
-		Serial.println("breaking out of pusherStateMachine");
-		Serial.println("pusherCanRun equals ");
-		Serial.print(pusherCanRun);
-		Serial.println(pusherCanRun);
-		loop();
+		//Serial.println("breaking out of pusherStateMachine");
+		//loop();
+		break; 
 
 	}
 }
 
-
 // Add the main program code into the continuous loop() function this used to be void loop()
 //   THIS IS THE WORKING LOOP BEFORE ATTEMPTING TO INCORPORATE AUTO, MANUAL, ETC.
 void manualMode(){
-	bool eStopPin = PINB & (1<<7);
-	bool chainSensorPin = PING & (1 << 5);
+
 	//Serial.println(PINB);
 	//Serial.println(eStopPin);
   while (eStopPin == 0) {   //while  (PINB < 128) EStop Button is not engaged
@@ -690,42 +845,110 @@ void manualMode(){
   // EStop();
 }
 
+void autoMode() {
+	while (eStopPin == 0) {   //while  (PINB < 128) EStop Button is not engaged
+		IR();
+		//Serial.println(PINA);
+		//Serial.println("Pusher can run equals... 1 is yes     ------  ");
+		//Serial.println(pusherCanRun);
+		//Serial.println(PINB);
+		//Serial.println(chainSensorPin);
+		/*
+		if (chainSensorPin == 0 & pusherCanRun == 1)
+		{
+			autoPusherStateMachine();
+			Serial.println(PINL);
+			return;
+		}
+		*/
+		if (PINA >= 192)  //if vacuum is established
+		{
+			deliverSteel();
+			IR();
+			return;
+		}
+			else 
+			{
+				Serial.println("vacuum is not established... should get steel");
+				getSteel();
+				IR();
+				return;
+			}
+		}
+	}
+
+
+//128 rightVacEst 64 leftVacEst
 void deliverSteel() {
-	while (PINA >= 192) {
+	//PORTK = PORTK & B11101011;
+	Serial.println("Deliver Steel reached ");
+	if (PINA == 224 && digitalRead(carriageAtConveyor) == LOW) { // vacL and R est 192 + 32 (carriageAtTop) & carriage is at conveyor
+		Serial.println("ready for drop on pusherStateMachine");
+		//autoMode(); //commented out at 3:02 to replace with return
+		return;
+	}
+	//while (PINA >= 192) {
 		//if vacuum is established
 	//if carriageAtConveyor; wait on pusherStateMachine
 	//else if carriageAtTop > carriageToConveyor()
 	//else raiseCarriage();carriageToConveyor();wait on pusherStateMachine()
-		Serial.println("Deliver Steel reached ");
-		if (PINA > 224 & digitalRead(21) == LOW) {
-
-			Serial.println("Ready to Drop ");
-			Serial.println("Moving to Conveyor ");
-			Serial.println("Raising Bridge ");
-			Serial.println("Waiting to Release Vacuum");
+		
+		
+		if (PINA != 224 && digitalRead(carriageAtConveyor) == HIGH) {
+			//Serial.println("raising carriage");
+			raiseCarriage();
+			return;
 		}
-	}
-}
-
-	void getSteel() {
-		//if vacuum is not established
-		//if carriageAtConveyor > raiseCarriage(); 
-		//if carriageAtTop > carriageToStack();
-		//if carriageAtStack > lowerCarriage(); bothVacActivated();
-		Serial.println("Get steel is reached ");
-	}
-
-	void autoMode() {
-		if (PINA >= 192) { //if vacuum is established
-			deliverSteel();
-			IR();
+		if (PINA == 224 && digitalRead(carriageAtConveyor) == HIGH) {
+			//Serial.println("sending carriage to Conveyor");
+			autoCarriageToConveyor();
+			return;
 		}
 		else {
-			getSteel();
-			IR();
+			return;
+		}
+	
+	
+}
+
+void getSteel() 
+{
+	Serial.println("Get steel is reached ");
+	Serial.println(PINA);
+	switch (getSteelState)
+	{
+	case HEAD_TO_STACK: {   //carriage is at top
+		Serial.println("head to stack is reached");
+		if (digitalRead(carriageAtConveyor) == 0) {
+			carriageToStack();
+			break;
+		}
+		if (digitalRead(carriageAtConveyor) == 1 && digitalRead(carriageAtStack) == 1) {
+			carriageToStack();
+			break;
+		}
+		if (digitalRead(carriageAtStack) == 0){
+			getSteelState++;
 		}
 	}
-
+	
+	case CARRIAGE_AT_STACK: {
+		if (digitalRead(carriageAtTop)==0) {
+			lowerCarriage();
+			break;
+		}
+		else {
+			bothVacActivated();
+			break;
+		}
+	}
+			 //if vacuum is not established
+		 //if carriageAtConveyor > raiseCarriage(); 
+		 //if carriageAtTop > carriageToStack();
+		 //if carriageAtStack > lowerCarriage(); bothVacActivated();
+			 
+	}
+}
 
 	void loop() {
 		while (PINB <= 127) {
@@ -736,20 +959,30 @@ void deliverSteel() {
 			}
 			if (PINB >= 112) {
 				Serial.println("Manual Mode ");
-				Serial.println(PINA);
+				//Serial.println(chainSensorPin);
 				manualMode();
-
+				IR();
+				return;
 			}
 			else {
 				Serial.println("Auto Mode ");
-				Serial.println(PINA);
+				//Serial.println(chainSensorPin);
 				autoMode();
+				if (digitalRead(chainPosSensor) == 0 && pusherCanRun == 1)
+				{
+					autoPusherStateMachine();
+					//Serial.println(PINL);
+					return;
+				}
 				IR();
+				return;
+
 			}
 		}
 		EStop();
 	}
 
+// PINB is ESTOP 128 steelOnRackLeft 64, steelOnRackRight 32
 
 //#define DETERMINE_PUSHER_STATE 0
 //#define DROP_PUSHER 1
