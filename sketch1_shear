@@ -2,7 +2,7 @@
 // 
 /*
 	Name:       RegistersWork2560ShearVSMERGE.ino
-	Created:  2/11/2019 1:30PM                       3/6/19 AUTO MODE WORKING... safeties for manual debug.
+	Created:  2/11/2019 1:30PM
 	Author:     ACORN\TROY
 */
 
@@ -215,7 +215,11 @@ void lowerCarriage() {
 }
 void carriageToStack() {
 	//if (digitalRead(carriageAtTop) == 0) {
-	if(PINA >=32){
+	if (PINK == B10101011) {
+		PORTK = PORTK & 11101011;
+		return;
+	}
+	if (PINA >=32){
 		Serial.println("carriage to stack");
 		if (PORTK == B01111111) {
 			return;
@@ -225,6 +229,7 @@ void carriageToStack() {
 		PORTK = PORTK & B01111111;
 		return;
 	}
+	return;
 	//return; //***************************************
 }
 
@@ -246,7 +251,7 @@ void autoCarriageToStack() {
 void carriageToConveyor() {
 	//if (digitalRead(carriageAtTop) == 1) {
 	if(PINA >=32){
-		Serial.println(PORTK, DEC);
+		//Serial.println(PORTK, DEC);
 		if (PORTK == B11011111) {
 			return;
 		}
@@ -277,10 +282,12 @@ void rightVacActivated() {
 	PORTK = PORTK & B11111011;
 }
 void releaseAllVac() {
-	//if (carriaAtTop == LOW) {
-	//	return;
-	//}
-	PORTK = PORTK | B00010100;
+	if (PINA >= 224) {
+		return;
+	}
+	else {
+		PORTK = PORTK | B00010100;
+	}
 }
 
 /*
@@ -429,41 +436,41 @@ void translateIR() // takes action based on IR code received
 		stopBridge();
 		break; }
 	case 0xD7E84B1B: { Serial.println(" To Conveyor");
-		if (digitalRead(carriageAtTop) == LOW) {
+		//if (digitalRead(carriageAtTop) == 0) {
 			carriageToConveyor();
-		}
+		//}
 		break;
 	case 0xFF02FD: Serial.println(" To Conveyor");
-		if (digitalRead(carriageAtTop) == LOW) {
+		//if (digitalRead(carriageAtTop) == 0) {
 			carriageToConveyor();
-		}
+		//}
 		break;
 	case 0xFF02F: Serial.println(" To Conveyor");
-		if (digitalRead(carriageAtTop) == LOW) {
+		//if (digitalRead(carriageAtTop) == 0) {
 			carriageToConveyor();
-		}
+		//}
 		break; }
 	case 0x20FE4DBB: {Serial.println(" To Stack");
-		if (digitalRead(carriageAtTop) == LOW) {
+		//if (digitalRead(carriageAtTop) == 0) {
 			carriageToStack();
 			PORTD = B00000100;
 			break;
-		}
-		else { break; }
+		//}
+		//else { break; }
 	case 0xFFC23D: Serial.println(" To Stack");
-		if (digitalRead(carriageAtTop) == LOW) {
+		//if (digitalRead(carriageAtTop) == 0) {
 			carriageToStack();
 			PORTD = B00000100;
 			break;
-		}
-		else { break; }
+		//}
+		//else { break; }
 	case 0xFFC23: Serial.println(" To Stack");
-		if (digitalRead(carriageAtTop) == LOW) {
+		//if (digitalRead(carriageAtTop) == 0) {
 			carriageToStack();
 			PORTD = B00000100;
 			break;
-		}
-		else { break; }
+		//}
+		//else { break; }
 	case 0xF076C13B: Serial.println(" Home the Pusher");
 		PORTC = PORTC | B00000010;
 		break;
@@ -902,7 +909,7 @@ void carriageStateMachine() {
 		autoMode();
 		break; 
 	case CARRIAGE_TO_STACK:
-		carriageToStack();
+		autoCarriageToStack();
 		break;
 	case LOWER_AT_STACK:
 		lowerCarriage();
@@ -923,10 +930,10 @@ void manualMode() {
 
 	//Serial.println(PINB);
 	//Serial.println(eStopPin);
-	while (eStopPin == 0) {   //while  (PINB < 128) EStop Button is not engaged
+	//while (eStopPin == 0) {   //while  (PINB < 128) EStop Button is not engaged
 		IR();
 		Serial.println(PINA);
-		//Serial.println(PINB);
+		Serial.println(PINK, BIN);
 		//Serial.println(chainSensorPin);
 		if (chainSensorPin == 0 & pusherCanRun == 1) {
 			pusherStateMachine();
@@ -936,7 +943,7 @@ void manualMode() {
 		else {
 			return;
 		}
-	}
+	//}
 	// EStop();
 }
 
@@ -1085,14 +1092,15 @@ void loop() {
 		PORTC = PORTC & B11101111; //outfeed set to run
 		if (PINB < 96) {
 			Serial.println("limited to manual mode because not 2 sheets on rack");
+			IR();
 			manualMode();
 			return;
 		}
 		if (PINB >= 112) {
 			Serial.println("Manual Mode ");
 			//Serial.println(chainSensorPin);
-			manualMode();
 			IR();
+			manualMode();
 			return;
 		}
 		else {
