@@ -206,16 +206,19 @@ void stopChain() {
 	return;
 }
 void raiseCarriage() {
-	PORTK = PORTK & B10111111;
+	PORTK = PORTK & B01111111;
 	return;
 }
 void lowerCarriage() {
-	PORTK = PORTK | B01000000;
+	if ((digitalRead(20) == 0) || (digitalRead(21) == 0)) {
+		PORTK = PORTK | B10000000;
+		return;
+	}
 	return;
 }
 void carriageToStack() {
 	//if (digitalRead(carriageAtTop) == 0) {
-	if (PINK == B10101011) {
+	if (PINK == B01101011) {                        //LEFT OFF HERE...............................
 		PORTK = PORTK & 11101011;
 		return;
 	}
@@ -226,7 +229,7 @@ void carriageToStack() {
 		}
 		//stopBridge();
 		PORTK = PORTK | B00110100;
-		PORTK = PORTK & B01111111;
+		PORTK = PORTK & B10111111;
 		return;
 	}
 	return;
@@ -237,12 +240,12 @@ void autoCarriageToStack() {
 	//if (digitalRead(carriageAtTop) == 0) {
 	if (PINA >= 32) {
 		Serial.println("auto carriage to stack");
-		if (PORTK == B01111111) {
+		if (PORTK == B00111111) {
 			return;
 		}
 		//stopBridge();
 		PORTK = PORTK | B00110100;
-		PORTK = PORTK & B01111111;
+		PORTK = PORTK & B00111111;
 		return;
 	}
 	//return; //***************************************
@@ -256,7 +259,7 @@ void carriageToConveyor() {
 			return;
 		}
 		//stopBridge();
-		PORTK = PORTK | B10000000;
+		//PORTK = PORTK | B10000000;
 		PORTK = PORTK & B11011111;
 		return;
 	}
@@ -285,8 +288,13 @@ void releaseAllVac() {
 	if (PINA >= 224) {
 		return;
 	}
-	else {
+	else if (PORTK < 128) {
 		PORTK = PORTK | B00010100;
+		return;
+	}
+	if (PINA == 6 || PINA == 38) {  //safety to ensure that vac releases once carriage starts to rise empty
+		PORTK = PORTK | B00010100;
+		return;
 	}
 }
 
@@ -295,7 +303,7 @@ something started glitching when the while loop and millis was being used
 or when the calls to stopBridge were made in toCoveyor and toStack
 but i think mostly its the while loop*/
 void stopBridgeAtStack() {
-	PORTK = PORTK | B10000000;
+	PORTK = PORTK | B01000000;
 	return;
 }
 void stopBridgeAtConveyor() {
@@ -305,7 +313,7 @@ void stopBridgeAtConveyor() {
 void stopBridge() {
 	Serial.println(PORTD, DEC);
 	intializeStopBridge = millis();
-	PORTK = PORTK | B10100000;
+	PORTK = PORTK | B01100000;
 	while (millis() - intializeStopBridge <= bridgeStopDelay) {
 	}
 	//if (digitalRead(21) == LOW) {
@@ -781,10 +789,10 @@ void autoPusherStateMachine()
 		PORTC = PORTC & B11111100;
 		//Serial.print("Pushers are Extending... Pushers are Extending");
 		//Serial.println(PINL);
-		lowerCarriage();  //added for autoPusherStateMachine
+		//lowerCarriage();  //added for autoPusherStateMachine
 		while (PINL != 48) {  //probably NOT NEEDED
 			if ((digitalRead(2) == LOW) || (digitalRead(3) == LOW)){
-				releaseAllVac();
+				releaseAllVac();  
 				leftRetractTripped = 0;
 				rightRetractTripped = 0;
 			}
@@ -800,14 +808,20 @@ void autoPusherStateMachine()
 			}
 		}
 		if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
-			PORTC = PORTC | B00000010;  // this sets retraction to happen
+			while (PINA >= 64) {
+				if (PINA <= 224) {
+					PORTK = PORTK | B00010100;
+				}
+			}
 			//Serial.print("Pushers are Retracting... Pushers are Retracting");
-			PORTK = PORTK & B10111111; //raiseCarriage
+			
+			PORTK = PORTK & B01111111; //RAISE CARRIAGE.... raiseCarriage
 			pusherState++;
 			//Serial.print("PusherState is... ");
 			//Serial.println(pusherState);
 		}
 	case RETRACT_PUSHERS:
+		PORTC = PORTC | B00000010;  // this sets retraction to happen
 		Serial.println("retract was reached");
 		if ((leftRetractTripped + rightRetractTripped) == 2) {
 			Serial.println("exiting retract");
@@ -983,110 +997,7 @@ void autoMode() {
 
 
 //128 rightVacEst 64 leftVacEst
-/*
-void deliverSteel() {
-	//PORTK = PORTK & B11101011;
-	Serial.println("Deliver Steel reached ");
-	if (PINA == 224 && digitalRead(carriageAtConveyor) == LOW) { // vacL and R est 192 + 32 (carriageAtTop) & carriage is at conveyor
-		Serial.println("ready for drop on pusherStateMachine");
-		//autoMode(); //commented out at 3:02 to replace with return
-		return;
-	}
-	//while (PINA >= 192) {
-		//if vacuum is established
-	//if carriageAtConveyor; wait on pusherStateMachine
-	//else if carriageAtTop > carriageToConveyor()
-	//else raiseCarriage();carriageToConveyor();wait on pusherStateMachine()
 
-
-	if (PINA != 224 && digitalRead(carriageAtConveyor) == HIGH) {
-		Serial.println("raising carriage");
-		raiseCarriage();
-		return;
-	}
-	if (PINA >= 224 && digitalRead(carriageAtConveyor) == HIGH) {
-		Serial.println("sending carriage to Conveyor autoCarriageToConveyor called");
-		autoCarriageToConveyor();
-		return;
-	}
-	else {
-		return;
-	}
-
-
-}
-
-/*void getSteel()
-{
-	Serial.println("Get steel is reached ");
-	Serial.println(PINA);
-	getSteelState = (PINA);
-	switch (getSteelState)
-	{
-	case HEAD_TO_STACK: {   //carriage is at top
-		Serial.println("head to stack is reached");
-		if (digitalRead(carriageAtConveyor) == 0) {
-			carriageToStack();
-			break;
-		}
-		if (digitalRead(carriageAtConveyor) == 1 && digitalRead(carriageAtStack) == 1) {
-			carriageToStack();
-			break;
-		}
-		if (digitalRead(carriageAtStack) == 0) {
-			getSteelState++;
-		}
-	}
-
-	case CARRIAGE_AT_STACK: {
-		if (digitalRead(carriageAtTop) == 0) {
-			lowerCarriage();
-			break;
-		}
-		else {
-			//bothVacActivated();
-			break;
-		}
-	}
-							//if vacuum is not established
-						//if carriageAtConveyor > raiseCarriage(); 
-						//if carriageAtTop > carriageToStack();
-						//if carriageAtStack > lowerCarriage(); bothVacActivated();
-
-	}
-}
-
-
-void getSteel()
-{
-	Serial.println("Get steel is reached ");
-	Serial.println(PINA);
-		if (digitalRead(carriageAtStack) == 0) {
-			Serial.println("lower and activate vacuum");
-			lowerCarriage();
-			bothVacActivated();
-			return;
-		}
-		if (PINA >= 32) {
-		carriageToStack();
-		return;
-		}
-		if (PINA < 32) {
-		bothVacActivated();
-		return;
-		}
-		if (PINA == 24) {
-				bothVacActivated();
-				return;
-		}
-		else {
-			//autoMode();
-			Serial.println("get steel not finding conditions");
-		}
-		
-	
-}
-*/
 void loop() {
 	while (PINB <= 127) {
 		PORTC = PORTC & B11101111; //outfeed set to run
