@@ -1,0 +1,26 @@
+void releaseAllVac() {
+	if ((digitalRead(carriageAtConveyor) == 1) && (digitalRead(carriageAtStack) == 1)) {
+		Serial.println("carriage not at conveyor or stack");
+		return;
+	}
+	if (PINA >= 224) { // 2 steel attached AND carriage is up
+		Serial.println("carriage is UP with 2 steel");
+		return;
+	}
+	if (PINA = 222) { // 2 steel attached AND carriage is up
+		PORTK = PORTK | B00010100;  //this disables both vacuum
+		return;
+	}
+	if (PINA >= 148 && PINA <= 158) { //left steel only vac was established for manual mode
+		PORTK = PORTK | B00010100;  //this disables both vacuum
+		return;
+	}
+	if (PINA >= 74 && PINA <= 94) { //right steel only vac was established for manual mode
+		PORTK = PORTK | B00010100;
+		return;
+	}
+	else { 
+		Serial.println("error preventing vacuum release");
+			return; 
+	}
+}
