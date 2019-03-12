@@ -1,0 +1,8 @@
+void bumpChain()
+{
+while (digitalRead(chainPosSensor)== LOW){
+  PORTC = PORTC | B00001100;
+	PORTC = PORTC & B11111011;
+  }
+PORTC = PORTC | B00001100;
+return;
