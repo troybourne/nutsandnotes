@@ -7,7 +7,7 @@ void releaseAllVac() {
 		Serial.println("carriage is UP with 2 steel");
 		return;
 	}
-	if (PINA = 222) { // 2 steel attached AND carriage is up
+	if (PINA = 222) { // 2 steel attached AND carriage is down
 		PORTK = PORTK | B00010100;  //this disables both vacuum
 		return;
 	}
