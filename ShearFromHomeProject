@@ -1,9 +1,9 @@
 // Visual Micro is in vMicro>General>Tutorial Mode
 // 
 /*
-	Name:       RegistersWork2560ShearVSMERGE.ino
-	Created:  3/13/19 9pm
-	Author:     ACORN\TROY
+    Name:       ShearFromHomeProjectCopy.ino
+    Created:	3/18/2019 3:17:11 PM
+    Author:     ACORN\TROY
 */
 
 // Define User Types below here or use a .h file
@@ -34,6 +34,7 @@ void getSteel();
 void deliverSteel();
 void determineCarriageState();
 void carriageStateMachine();
+void bumpChain();
 // Define Functions below here or use other .ino or cpp files
 //
 // The setup() function runs once each time the micro-controller starts
@@ -129,16 +130,31 @@ void setup()
 	digitalWrite(20, HIGH);     //at conveyor interrupt to stop bridge motor
 	pinMode(21, INPUT_PULLUP);
 	digitalWrite(21, HIGH);
+	pinMode(18, INPUT_PULLUP);
+	digitalWrite(18, HIGH);
 
 	attachInterrupt(0, pusherCanRaiseFlagL, FALLING);
 	attachInterrupt(1, pusherCanRaiseFlagR, FALLING);
 	attachInterrupt(2, stopBridgeAtConveyor, FALLING);
 	attachInterrupt(3, stopBridgeAtStack, FALLING);
+	//attachInterrupt(5, troysSerialPrint, LOW);
+
 	delay(1000);
 }
 
 void chooseMode() {
 
+}
+//void troysSerialPrint() {
+	//delay(250);
+	//Serial.println(digitalRead(PINA));
+	//delay(500);
+//}
+void bumpChain() {
+	while (digitalRead(chainPosSensor) == 0) {
+		PORTC = PORTC & B11111011;
+	}
+	PORTC = PORTC | B00000100;
 }
 
 void pusherCanRaiseFlagL() {
@@ -273,9 +289,9 @@ void carriageToConveyor() {
 		if (PINK >= 39 && PINK <= 63) {
 			Serial.println("millis change direction delay");
 			intializeStopBridge = millis();
-				while (millis() - intializeStopBridge < bridgeStopDelay) {
-					PORTK = PORTK | B01000000;
-				}
+			while (millis() - intializeStopBridge < bridgeStopDelay) {
+				PORTK = PORTK | B01000000;
+			}
 			PORTK = PORTK & B11011111;
 			return;
 		}
@@ -286,9 +302,9 @@ void carriageToConveyor() {
 	}
 	else {
 		Serial.println("carriage already moving towards conveyor");
-			return;
+		return;
 	}
-	
+
 }
 void autoCarriageToConveyor()
 {
@@ -302,12 +318,15 @@ void autoCarriageToConveyor()
 }
 void bothVacActivated() {
 	PORTK = PORTK & B11100111;
+	return;
 }
 void leftVacActivated() {
 	PORTK = PORTK & B11101111;
+	return;
 }
 void rightVacActivated() {
 	PORTK = PORTK & B11110111;
+	return;
 }
 void releaseAllVac() {
 	if ((digitalRead(carriageAtConveyor) == 1) && (digitalRead(carriageAtStack) == 1)) {
@@ -382,6 +401,8 @@ void EStop()
 	digitalWrite(38, HIGH);
 	while (PINB < 128) {
 		Serial.println("EStop hard button entered EStop Mode");
+		Serial.println(PINA);
+		Serial.println(PINK);
 	}
 	while (PINB >= 128) {
 		Serial.println("EStop remote button exiting EStop Mode");
@@ -675,7 +696,7 @@ void pusherStateMachine()
 	}
 	else {
 		PORTC = PORTC | B00001100;  //stops the chain whether in forward or reverse
-		if (PINA == 224 && digitalRead(carriageAtConveyor) == 0) {
+		if (PINA == 248 && digitalRead(carriageAtConveyor) == 0) {
 			Serial.println("lowering carriage");
 			lowerCarriage(); //comment out for FULL MANUAL MODE
 		}
@@ -829,10 +850,8 @@ void autoPusherStateMachine()
 		//Serial.println(PINL);
 		//lowerCarriage();  //added for autoPusherStateMachine
 		while (PINL != 48) {  //probably NOT NEEDED
-			if ((digitalRead(2) == LOW) || (digitalRead(3) == LOW)) {
+			if (PINA == 222) {  //both vacsEstab, bothOnChain, bothCarriageOnSteel, carriageIsDown
 				releaseAllVac();
-				leftRetractTripped = 0;
-				rightRetractTripped = 0;
 			}
 
 			if (irrecv.decode(&results)) // have we received an IR signal?
@@ -846,13 +865,36 @@ void autoPusherStateMachine()
 			}
 		}
 		if (PINL == 48) { //48 means down inputs&extract inputs all simultaneously LOW
-			while (PINA >= 64) {
-				if (PINA <= 224) {
-					PORTK = PORTK | B00011000;
+
+			if (digitalRead(carriageAtConveyor) == 1) { //if carriage isn't at conveyor, retraction should happen
+				pusherState++;
+				return;
+			}
+			if (PINA == 222) {  //both vacsEstab, bothOnChain, bothCarriageOnSteel, carriageIsDown
+				releaseAllVac();
+				while (PINA >= 192) {
 				}
+				PORTK = PORTK & B01111111; //RAISE CARRIAGE.... raiseCarriage
+				pusherState++;
+				return;
+			}
+			if (PINA >= 216 && PINA <=222){
+				while (PINA != 222) {
+				}
+				releaseAllVac();
+				while (PINA >= 192) {
+				}
+				raiseCarriage();
+				//if (PINA <= 224) {
+				//	PORTK = PORTK | B00011000;
+				//}
 			}
 			//Serial.print("Pushers are Retracting... Pushers are Retracting");
-
+			if (PORTK >= 128 && digitalRead(carriageAtTop) == 1) { //trying to check carriageUpRelay against carriageAtTop Sensor in case sluggish drop
+				while (digitalRead(carriageAtTop) == 1) {
+				}
+				return;  // MIGHT paste the above IF statement here....
+			}
 			PORTK = PORTK & B01111111; //RAISE CARRIAGE.... raiseCarriage
 			pusherState++;
 			//Serial.print("PusherState is... ");
@@ -877,6 +919,7 @@ void autoPusherStateMachine()
 	case RAISE_PUSHERS:
 		//Serial.println("Raise Pushers REACHED");
 		PORTC = PORTC | B00000011;
+		bumpChain();
 		pusherState++;
 
 	case HOME_AND_VERIFY_PUSHERS:
@@ -906,8 +949,8 @@ void autoPusherStateMachine()
 	}
 }
 void determineCarriageState() {
-	if (PINA >= 224) {
-		if (digitalRead(carriageAtConveyor) == 1) {
+	if (PINA >= 224) {  //both vac established and carriage up
+		if (digitalRead(carriageAtConveyor) == 1) {   // at conveyor or not
 			carriageState = 1;
 			Serial.println("Carriage to conveyor");
 			return;
@@ -918,12 +961,12 @@ void determineCarriageState() {
 			return;
 		}
 	}
-	if (PINA >= 192) {
+	if (PINA >= 192 && digitalRead(carriageAtStack)==0) {    //both vac established and at stack but not up
 		carriageState = 0;
 		Serial.println("Raise at stack");
 		return;
 	}
-	if (PINA <= 192 && PINA >= 32) {
+	if (PINA <= 192 && PINA >= 32) {  //vacuum NOT established but carriage IS UP
 		if (digitalRead(carriageAtStack) == 0) {
 			stopBridgeAtStack();
 			carriageState = 4;
@@ -938,14 +981,18 @@ void determineCarriageState() {
 
 		}
 	}
-	else if (PINA >= 24) {                  //turning this into an elseif for carriage on steel to activate vacuum
+	//if (PINA <= 31 && PINA >= 24) {  //turning this into an elseif for carriage on steel to activate vacuum
+	else{
+		PORTK = PORTK & B11100111;
 		carriageState = 5;
 		Serial.println("Activate both Vacuums");
 		return;
 	}
 	carriageState = 6;
-	Serial.println("carriageState undefined.");
-	return;
+		Serial.println("carriageState undefined.");
+		//determineCarriageState();
+		Serial.println(PINA);
+	
 }
 void carriageStateMachine() {
 	switch (carriageState) {
@@ -968,9 +1015,14 @@ void carriageStateMachine() {
 		break;
 	case ACTIVATE_BOTH_VAC:
 		bothVacActivated();
-		break;
+		while (PINA < 192) {
+			Serial.println(PINA);
+		}
+		carriageState = 0;
+		return; 
 	case UNDEFINED_CARRIAGE_STATE:
 		Serial.println("carriage State undefined... ERROR.");
+		determineCarriageState();
 		break;
 
 	}
@@ -987,7 +1039,7 @@ void manualMode() {
 	Serial.println(PINA);
 	Serial.println(PINK);
 	//Serial.println(chainSensorPin);
-	if (chainSensorPin == 0 & pusherCanRun == 1) {
+	if (digitalRead(chainSensorPin) == 0 & pusherCanRun == 1) {
 		pusherStateMachine();
 		Serial.println(PINL);
 		return;
