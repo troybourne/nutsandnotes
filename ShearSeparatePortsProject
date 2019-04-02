@@ -37,6 +37,7 @@ void autoPusherStateMachine();
 void autoPusherStateMachine2();
 void getSteel();
 void deliverSteel();
+void releaseAndRaise(); // autoPusher will repeatedly call this, if()'s to release and raise, return to autoPusherStateMachine until retraction
 void determineCarriageState();
 void carriageStateMachine();
 void bumpChain();
@@ -69,13 +70,16 @@ bool carriageIncludedWithPushers = 0; // variable to determine if steel was read
 int pusherCanRunDelay = 2500; // delay to prevent restarting pusherStateMachine because of chainPosSensor
 unsigned long forwardChainInvokedTime = 0;
 int chainPosSensor = 4;
+int eStopLight = 9;
+int halfLoadedLight = 8;
+int fullAutoLight = 7;
 int returnStatePinReadC = 0;
 int returnStatePinReadK = 0;
 int bridgeStopDelay = 1500;
 unsigned long intializeStopBridge = 0;
-int carriageAtConveyor = 21;
-int carriageAtStack = 20;
-int carriageAtTop = 27;
+int carriageAtConveyor = 18;
+int carriageAtStack = 19;
+int carriageAtTop = 38;
 bool eStopPin = PINB & (1 << 7);
 //bool chainSensorPin = PING & (1 << 5); //digital pin 4
 int chainSensorPin = 4;
@@ -83,7 +87,7 @@ int getSteelState = 0;
 int vacVerified = 0;
 bool leftVacVerified = 0;
 bool rightVacVerified = 0;
-int sumPinAPinJ = 0;
+//int sumPinAPinJ = 0;
 int mode = 0; // 0 limited manual due to steel; 1 chosen manual mode from remote; 2 auto mode
 
 
@@ -235,6 +239,7 @@ void verifyBothVacs() {
 }
 void releaseBothVac() {
 	PORTK = PORTK | B00011000;
+	return;
 }
 void autoCarriageToConveyor() {
 	if (PIND == 128 || PIND == 132 ) {
@@ -272,16 +277,36 @@ void pusherCanRaiseFlagR() {
 	//pusherStateMachine();
 	return;
 }
+void releaseAndRaise() {
+	if (PINA == 92 || PINA == 84 || PINA == 168 || PINA == 172 ||PINA == 252) {
+		releaseBothVac();
+		return;
+	}
+	if (PINA < 16) {
+		pusherState++;
+		return; // or maybe autoPusherStateMachine()????
+	}
+	if (PINA < 64) {
+		raiseCarriage();
+		return;
+	}
+	else {
+		Serial.println("raise and release no condition met");
+		return;
+	}
+}
 void pusherStateMachine() {
 
 }
 void autoPusherStateMachine() {
+	if(PIND == 136 && PINA ==)
+	lowerCarriage();
 
 }
 void autoPusherStateMachine2() {
 
 }
-void getSteel() {
+void getSteel() { // no vac is established... PINA < 64
 	switch (PIND) {
 	case 8: // not up at conveyor released
 		raiseCarriage();
@@ -313,6 +338,11 @@ void deliverSteel() {
 	// raise carriage, to conveyor, await drop, drop carriage, verifyCarriageDown, releaseBothVac
 	switch (PIND) {
 	case 4: //down or rising at Stack
+		verifyBothVacs();
+		while (vacVerified != 2) {
+			Serial.println("waiting for vacuum to establish");
+			verifyBothVacs();
+		}
 		raiseCarriage();
 		break;
 	case 132: //up at stack loaded
@@ -610,15 +640,15 @@ void setup()
 	irrecv.enableIRIn(); // Start the receiver
 	//DDRD = DDRD | B1111110; //b128 redLED(pin38), b8 yellowLED(pin18), b4 greenLED(pin19), b2 inputEStopHardReset, b1 IRSignal
 	//PORTD = B00000010; //b2 is PULLUP
-	pinMode(38, OUTPUT);
-	digitalWrite(38, LOW);
+	pinMode(9, OUTPUT);
+	digitalWrite(9, LOW);
 
 	DDRB = DDRB | B00000000; //13, 12, 11, 10, 50, 51, 52 ,53 all inputs
 	PORTB = B11111111; // red dip switches... 
 	DDRC = B11111111; //analog A7, A6, A5, A4, A3, A2, A1, A0 ALL OUTPUTS
 	PORTC = B11111111;
 	DDRD = DDRD & B01110000;
-	PORTD = B10001111; //strictly carriage up, 18 (INT5) at conveyor, 19 (INT4) at stack, 
+	PORTD = B10001111; //38 strictly carriage up, 18 (INT5) at conveyor, 19 (INT4) at stack, 
 	DDRK = B11111111;
 	PORTK = B11111111;
 	DDRL = B11000000;
@@ -631,14 +661,12 @@ void setup()
 	//attachInterrupt(5, pusherStateMachine, FALLING);
 	pinMode(2, INPUT_PULLUP); // retracting pass proximity sensor for interrupt
 	pinMode(3, INPUT_PULLUP); // retracting pass proximity sensor for interrupt
-	pinMode(19, OUTPUT);
-	digitalWrite(19, LOW);
 	digitalWrite(2, HIGH);
 	digitalWrite(3, HIGH);
-	pinMode(20, INPUT_PULLUP);  //at stack interrupt to stop bridge motor
-	digitalWrite(20, HIGH);     //at conveyor interrupt to stop bridge motor
-	pinMode(21, INPUT_PULLUP);
-	digitalWrite(21, HIGH);
+	pinMode(19, INPUT_PULLUP);  //at stack interrupt to stop bridge motor
+	digitalWrite(19, HIGH);     
+	pinMode(18, INPUT_PULLUP);  //at conveyor interrupt to stop bridge motor
+	digitalWrite(18, HIGH);
 
 	attachInterrupt(0, pusherCanRaiseFlagL, FALLING);
 	attachInterrupt(1, pusherCanRaiseFlagR, FALLING);
