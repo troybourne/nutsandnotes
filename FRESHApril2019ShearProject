@@ -35,7 +35,6 @@ void pusherCanRaiseFlagL();
 void pusherCanRaiseFlagR();
 void pusherStateMachine();
 void autoPusherStateMachine();
-void autoPusherStateMachine2();
 void getSteel();
 void deliverSteel();
 //void releaseAndRaise(); // autoPusher will repeatedly call this, if()'s to release and raise, return to autoPusherStateMachine until retraction
@@ -547,6 +546,9 @@ void autoPusherStateMachine() {
 			if (PINA < 64) {
 				raiseCarriage();
 				Serial.println("carriage is raising");
+				pusherState = 3;
+				break;
+				
 			}
 			if (irrecv.decode(&results)) // have we received an IR signal?
 			{
@@ -589,16 +591,24 @@ void autoPusherStateMachine() {
 	case VERIFY_EXTENDED_AND_CARRIAGE_UP:
 		Serial.print("Verifying.....   PusherState is... ");
 		Serial.println(pusherState);
+		Serial.print("Verifying.........   PINL is........ ");
+		Serial.println(PINL);
+		Serial.print("Verifying................   PIND is.......... ");
+		Serial.println(PIND);
 		leftRetractTripped = 0;
 		rightRetractTripped = 0;
-		if (PINL == 48 && PIND >128) {
-			pusherState++;
+		if (PIND >= 128) {
+			while (PINL != 48) {
+				break;
+			}
+			pusherState = 4;
 			break;
-		} 
+		}
+	 
 		break;
 	case RETRACT_PUSHERS:
-		leftRetractTripped = 0;
-		rightRetractTripped = 0;
+		//leftRetractTripped = 0;
+		//rightRetractTripped = 0;
 		PORTC = PORTC | B00000010;  // this sets retraction to happen
 		Serial.println("retract was reached");
 		if ((leftRetractTripped + rightRetractTripped) == 2) {
@@ -752,6 +762,10 @@ void deliverSteel() {
 		}
 		raiseCarriage();
 		break;
+	case 8:
+		break;
+	case 9:
+		break;
 	case 132: //up at stack loaded
 		carriageToConveyor();
 		break;
@@ -812,6 +826,12 @@ void determineCarriageState() {// based on vac test OR PINA determines if delive
 		if (PINA > 64) {
 			verifyBothVacs();
 			deliverSteel();
+		}
+		if (PINA == 12 || PINA == 8 || PINA == 4) {
+			if (pusherState == 2 || pusherState == 3) {
+				autoPusherStateMachine();
+			}
+			return;
 		}
 		else {
 			Serial.println("determine carriage state conditions not met");
@@ -1125,7 +1145,7 @@ void setup()
 	attachInterrupt(1, pusherCanRaiseFlagR, FALLING);
 	attachInterrupt(5, stopBridgeAtConveyor, RISING);
 	attachInterrupt(4, stopBridgeAtStack, RISING);
-	attachInterrupt(2, autoPusherStateMachine, FALLING);
+	attachInterrupt(2, stopChain, FALLING); 
 	delay(1000);
 
 	initializeOutputs();
