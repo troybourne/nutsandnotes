@@ -1,0 +1,17 @@
+void carriageState5() {
+	//this function should determine whether the carriage is included and
+	//therefore if we advance to carriageState = 6 and drop the carriage with autoPusherStateMachine
+	//the vacuums established on the ready hanging carriage will be compared to the steelOnChains
+	if (pusherState == 1 || pusherState == 2) {
+		if (PINA == 80 || PINA == 88 || PINA == 160 || PINA == 164 || PINA == 240) {
+			currentPinA = PINA;
+			carriageIncludedWithPushers = 1;
+			carriageState = 6;
+			return;
+		}
+		else {
+			carriageState = 5;
+			return;
+		}
+	}
+}
