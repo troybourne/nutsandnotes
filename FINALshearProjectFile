@@ -550,6 +550,10 @@ void carriageStateMachine() {
 			break; // was return
 		}
 	case BRIDGE_TO_STACK_EMPTY: //1
+		if (PINL == 48 || PINL == 60 || PINL == 56 || PINL == 52) {
+			autoPusherStateMachine();
+			return;
+		}
 		Serial.println("carriage state is ...............");
 		Serial.print(carriageState);
 		PORTK = PORTK & B00111111;
@@ -680,6 +684,7 @@ void autoPusherStateMachine() {
 	case HOMED: //0
 		Serial.println("PUSHER state is .............................");
 		Serial.print(pusherState);
+		PORTC = PORTC & B11111011; // set forward chain
 		PORTC = PORTC | B00000011; //set drop and extend to off
 		if (chainPushTrigger == 1) {
 			//stop the chain??
