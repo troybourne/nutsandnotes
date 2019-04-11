@@ -1,7 +1,7 @@
 // Visual Micro is in vMicro>General>Tutorial Mode
 // 
 /*
-	Name:       FINALshearProjectFile.ino                                  NEW BRANCH
+	Name:       FINALshearProjectFile.ino
 	Created:	4/1/2019 12:50:28 PM
 	Author:     ACORN\TROY
 */
@@ -52,6 +52,7 @@ void outFeederOff();
 void pinChangePrintStatement();
 void initializeOutputs();
 void chainInterruptPusherTrigger();
+void modeCalc();
 //End Prototypes here
 
 
@@ -140,6 +141,29 @@ decode_results results; // create instance of 'decode_results'
 //END DECLARATIONS HERE
 
 //functions here
+
+void modeCalc() {
+	if (PINB == 32 || PINB == 64 || PINB == 96) {
+		mode = 2;
+		return;
+	}
+	if (PINB >= 128) {
+		mode = 0; // possible EStop mode
+		return;
+	}
+	if (PINB == 48 || PINB == 80 || PINB == 112) {
+		mode = 3; // IR CHOSE MANUAL
+		return;
+	}
+	if (PINB == 16 || PINB == 17 || PINB == 48 || PINB == 49 || PINB == 80 || PINB == 81 || PINB == 112 || PINB == 113) {
+		mode = 1; // ABSOLUTE MANUAL chosen from hardwired button
+		return;
+	}
+	if (PINB < 32) {
+		initializeOutputs();
+		return;
+	}
+}
 void printStateChangeOnce() {
 	if (pscount == 0) {
 		//int lastCarriageState = carriageState;
@@ -1234,18 +1258,38 @@ void loop() {
 	//look at the possiblity of while or if carriage state == 5 then IN THE LOOP.
 	// look at the possibility of if pusherState== 0 forward chain
 	while (PINB <= 127) {
-		if (PINB == 16 || PINB == 17 || PINB == 48 || PINB == 49 || PINB == 80 || PINB == 81 || PINB == 112 || PINB == 113) {
-			Serial.println("MANUAL MODE");
-			digitalWrite(8, HIGH);
+		modeCalc();
+		if (mode == 1) {
+			Serial.println("ABSOLUTE MANUAL MODE");// only 8
+			//PORTH = B11011111;
+			return;
+		}
+		if (mode == 2) {
+			Serial.println("AUTO MODE");
+			//PORTH = B11101111;
+					//Main loop before modes
+			IR();
+			carriageStateMachine();
+			IR();
+			//Serial.println("in between functions in the main loop");
+			IR();
+			autoPusherStateMachine();
+			Serial.println(mode);
+			//MainLoop before modes
+			return;
+		}
+		if (mode == 3) {
+			Serial.println("IR CHOSE MANUAL MODE");
+			//PORTH = B11001111;
+			IR();
+			return;
+		}
+		if (mode == 0) {
+			Serial.println("ESTOP MODE");
+			//PORTH = B10111111;
 			return;
 		}
 
-		IR();
-		carriageStateMachine();
-		IR();
-		//Serial.println("in between functions in the main loop");
-		IR();
-		autoPusherStateMachine();
 	}
 	
 	EStop();
