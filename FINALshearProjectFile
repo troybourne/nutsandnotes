@@ -779,6 +779,7 @@ void carriageStateMachine() { // without the carriage involved
 			break; // was return
 		}
 	case BRIDGE_TO_STACK_EMPTY: //1
+		//PORTK = PORTK & B00111111;// carriage up... motor to stack on                added this line from below in case 1
 		if (PINL == 48 || PINL == 60 || PINL == 56 || PINL == 52) {
 			autoPusherStateMachine();
 			return;
@@ -1095,10 +1096,19 @@ void autoPusherStateMachine() {
 		PORTC = PORTC | B00000010;
 		if (lrt == 1 && rrt == 1) {
 			PORTC = PORTC | B00000001;
-			pusherState = 0;
+			//if (PINL == 63){
+				pusherState = 0; // moved from above this if statement
 			chainPushTrigger = 0;
 			lrt = 0;
 			rrt = 0;
+			//}
+			if (PINA < 16) {  //this if was added 
+				forwardChain();
+				//pusherState = 0; // moved from above this if statement
+			}
+			if (carriageState <= 5) { // this also was added
+				forwardChain();
+			}
 			break;
 		}
 		else {
@@ -1176,9 +1186,6 @@ void loop() {
 	//look at the possiblity of while or if carriage state == 5 then IN THE LOOP.
 	// look at the possibility of if pusherState== 0 forward chain
 	while (PINB <= 127) {
-		if (pusherState == 0 && PIND >= 128) {
-			forwardChain();
-		}
 
 		//if (pusherState == 0 && carriageState == 5) {  //
 			//if (PIND != 136 || PIND != 137) {
