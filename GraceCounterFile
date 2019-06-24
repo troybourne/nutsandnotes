@@ -1,0 +1,307 @@
+/*
+ Name:		VS_GraceCounterFile.ino
+ Created:	6/24/2019 11:20:32 AM
+ Author:	TROY
+*/
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include "Adafruit_LEDBackpack.h"
+#include "PinChangeInterrupt.h"
+Adafruit_7segment matrix = Adafruit_7segment();
+
+// Global Variables
+
+const byte interruptPin = A0;
+
+
+#define LOW_COUNT_WARNING 5   // make macros all caps so you can tell the difference
+
+
+//state machine states... states are places you can land...  defines are statics... they don't change
+#define SETUP_STATE  0  //creating a name that makes sense and replaces non specific numbers
+#define RUN_STATE    1  //  don't put a ; after defines, because this would be assigned below also.
+
+
+int globalstate = SETUP_STATE;
+int newOrderQuant;
+int oldOrderQuant;
+int currentCounterDisplay;
+int hundreds, tens, ones;
+
+void irqPin();
+void readRunButtons();
+void readSetupButtons();
+void runStateTask();
+void setupStateTask();
+void switchToSetup();
+
+
+const int buttonPin[] = { 9, 10, 11, 12 };  // the number of the pushbutton pins
+
+int  buttonState9 = LOW; //this is declaring AND setting in one statement
+int  buttonState10 = LOW;
+int  buttonState11 = LOW;
+int  buttonState12 = LOW;
+int zeroStop = 7;
+unsigned long trigger_time = 0;
+unsigned long last_trigger_time = 0;
+
+void setup() {
+	// put your setup code here, to run once:
+	Serial.begin(9600); //this sets up the arduino serial connection at 9600baud
+	Serial.println("globalstate");
+	pinMode(9, INPUT_PULLUP); //keypad#1    reset (short press) OR set (long press)
+	pinMode(10, INPUT_PULLUP); //keypad#2  hundreds
+	pinMode(11, INPUT_PULLUP);  //keypad#3  tens
+	pinMode(12, INPUT_PULLUP);  //keypad#4  ones
+	digitalWrite(9, HIGH);
+	digitalWrite(10, HIGH);
+	digitalWrite(11, HIGH);
+	digitalWrite(12, HIGH);
+	//digitalWrite(zeroStop, LOW);
+	pinMode(zeroStop, OUTPUT); //output to 5v relay for machine cycle interrupt when count = 0
+	if (currentCounterDisplay > 0)
+	{
+		digitalWrite(zeroStop, LOW);
+	}
+	else
+	{
+		digitalWrite(zeroStop, HIGH);
+	}
+
+	pinMode(interruptPin, INPUT_PULLUP);
+	attachInterrupt(digitalPinToInterrupt(interruptPin), irqPin, FALLING);
+	matrix.begin(0x70);
+
+}
+
+void readSetupButtons()
+{
+	int blinkcounter = 0;
+	int buttonPressCount = 0;
+	bool buttonState = HIGH;
+	for (int x = 0; x < 4; x++)
+
+	{
+		if (currentCounterDisplay > 0)
+		{
+			digitalWrite(zeroStop, LOW);
+		}
+		else
+		{
+			digitalWrite(zeroStop, HIGH);
+		}
+
+		//signifying the state of which the button is in by reading the appropriate pin #
+		buttonState = digitalRead(buttonPin[x]);
+
+		// check if the pushbutton on the keypad is pressed.
+		// if it is, the buttonState is LOW:
+		if (buttonState == LOW && buttonPin[x] == 11)
+		{
+			while (buttonState == LOW && buttonPin[x] == 11)
+			{
+				buttonPressCount++;
+				buttonState = digitalRead(buttonPin[x]);
+				delay(200);
+			}
+			if (buttonPressCount > 150)
+			{
+				newOrderQuant = currentCounterDisplay;
+				oldOrderQuant = currentCounterDisplay;
+				Serial.println('long press determined');
+				matrix.clear();
+				matrix.writeDisplay();
+				delay(350);
+				matrix.print(currentCounterDisplay);
+				matrix.writeDisplay();
+				globalstate = RUN_STATE;
+
+			}
+			else
+			{
+				//switchToSetup();
+				currentCounterDisplay = oldOrderQuant;
+				digitalWrite(zeroStop, LOW);  //****************************************************
+				globalstate = RUN_STATE;  //this was at line 40
+
+			}
+
+		}
+		if (buttonState == LOW && buttonPin[x] == 12) {
+			hundreds++;
+			delay(200);
+		}
+		if (buttonState == LOW && buttonPin[x] == 9) {
+			tens++;
+			delay(200);
+		}
+		if (buttonState == LOW && buttonPin[x] == 10) {
+			ones++;
+			delay(200);
+		}
+	}
+	//Serial.print(hundreds);
+	currentCounterDisplay = (100 * (hundreds % 10)); // possibly change for Kevin's vers... greaer order size
+	currentCounterDisplay += (10 * (tens % 10));
+	currentCounterDisplay += (1 * (ones % 10));
+
+}
+
+void setupStateTask()
+{
+	boolean drawDots = true;
+	readSetupButtons();
+	matrix.drawColon(drawDots);
+	matrix.print(currentCounterDisplay);
+	matrix.writeDisplay();
+
+}
+
+void readRunButtons()
+{
+	int buttonPressCount = 0;
+
+	bool buttonState = 0;
+	for (int x = 0; x < 4; x++)
+	{
+		if (currentCounterDisplay > 0)
+		{
+			digitalWrite(zeroStop, LOW);
+		}
+		else
+		{
+			digitalWrite(zeroStop, HIGH);
+		}
+		//signifying the state of which the button is in by reading the appropriate pin #
+		buttonState = digitalRead(buttonPin[x]);
+
+		// check if the pushbutton on the keypad is pressed.
+		// if it is, the buttonState is LOW:
+		if (buttonState == LOW && buttonPin[x] == 11)
+		{
+			while (buttonState == LOW && buttonPin[x] == 11)
+			{
+				buttonPressCount++;    //this is for a misfeed... makeup count for false bagged part   
+				buttonState = digitalRead(buttonPin[x]);
+				delay(250);
+			}
+			if (buttonPressCount < 250)
+			{
+				currentCounterDisplay = newOrderQuant;
+			}
+			else
+			{
+				switchToSetup();
+			}
+
+		}
+		if (buttonState == LOW && buttonPin[x] == 12) {
+
+		}
+		if (buttonState == LOW && buttonPin[x] == 9) {
+
+		}
+		if (buttonState == LOW && buttonPin[x] == 10)
+		{
+			currentCounterDisplay++;
+			delay(50);
+		}
+	}
+
+}
+
+
+void runStateTask()
+{
+	static int blinkcounter = 0;
+	if (currentCounterDisplay > 0)    // THIS IS THE ZERO STOP ACTIVATE THE RELAY TO PREVENT CYCLING
+	{
+		digitalWrite(zeroStop, LOW);
+	}
+	else
+	{
+		digitalWrite(zeroStop, HIGH);
+	}
+
+	if (currentCounterDisplay <= LOW_COUNT_WARNING)      //THIS IS THE LOW COUNT WARNING FLASHING BELOW
+	{
+		if (blinkcounter++ > 7)
+		{
+			matrix.clear();
+			matrix.writeDisplay();
+			if (blinkcounter > 6)
+			{
+				blinkcounter = 0;
+			}
+		}
+		else
+		{
+			matrix.print(currentCounterDisplay);
+			matrix.writeDisplay();
+		}
+
+	}
+	else
+	{
+		matrix.print(currentCounterDisplay);
+		matrix.writeDisplay();
+	}
+	readRunButtons();
+
+}
+
+
+void irqPin()
+{
+
+	{
+		if (globalstate == SETUP_STATE)
+		{
+			//return;
+		}
+		if (currentCounterDisplay > 0)
+		{
+			trigger_time = millis();
+			if (trigger_time - last_trigger_time > 20000)
+				// check to see if increment()was called in the last 2000 milliseconds
+				currentCounterDisplay--;
+			//delayMicroseconds(15000);
+				   //delay(1000);      this should likely be gotten rid of
+
+		}
+		//  else
+		//  {
+		//     switchToSetup();
+		//
+	}
+}
+
+
+void switchToSetup()
+{
+	Serial.println("switchToSetup reached");
+	hundreds = (currentCounterDisplay / 100); // FOR KEVIN OVER A THOUS will need to remove modulo
+	tens = ((currentCounterDisplay % 100) / 10);
+	ones = ((currentCounterDisplay % 10) / 1);
+	globalstate = SETUP_STATE;
+	oldOrderQuant = currentCounterDisplay;
+
+}
+
+void loop()
+{
+	switch (globalstate) //switch is like an IF statement, like saying IF(globalstate)==setupState...
+	{
+	case SETUP_STATE:  //case is comparison, HAS to be within the curly/scope a switch statement, case is comparing constant values only, no variables, note colon on case statement
+		setupStateTask();
+		break;                   //is the break neccessary?
+	case RUN_STATE:
+		runStateTask();
+		break;
+	}
+	//delay(50);
+}
+
+
