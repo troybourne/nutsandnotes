@@ -8,6 +8,10 @@
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
 #include "PinChangeInterrupt.h"
+//#include <iostream>
+//using std::cout;
+//using std::endln;
+
 Adafruit_7segment matrix = Adafruit_7segment();
 
 // Global Variables
@@ -100,8 +104,11 @@ void readSetupButtons()
 		// if it is, the buttonState is LOW:
 		if (buttonState == LOW && buttonPin[x] == 11)
 		{
+			
+			Serial.println("button press ones reached?");
 			while (buttonState == LOW && buttonPin[x] == 11)
 			{
+				
 				buttonPressCount++;
 				buttonState = digitalRead(buttonPin[x]);
 				delay(200);
