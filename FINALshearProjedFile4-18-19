@@ -53,6 +53,11 @@ void pinChangePrintStatement();
 void initializeOutputs();
 void chainInterruptPusherTrigger();
 void modeCalc();
+void buttonReadF();
+void buttonReadJ();
+void translateButtonPressF();
+void translateButtonPressJ();
+void shearAutoCycle();
 //End Prototypes here
 
 
@@ -89,6 +94,7 @@ int lastCarriageState = 9;
 int carriageState = 8;
 bool chainPushTrigger = 0;
 bool pusherCanRun = 0;
+bool encoderTurning = 0;
 int pusherCanRunTracker = 1;
 int totalTrip = 0;
 int lrt = 0;
@@ -134,6 +140,9 @@ int mode = 0; // 0 is ESTOP, 1 ABSOLUTE MANUAL hardwired button, 2 AUTO-IR CHOOS
 //int lastMode = 0;
 //int releaseAndRaise = 0;
 int currentPinA = 255;
+int buttonPressF = 0;
+int buttonPressJ = 0;
+int activeButton = 0;
 
 int receiver = 5; // pin 1 of IR receiver to Arduino digital pin 5
 IRrecv irrecv(receiver); // create instance of 'irrecv'
@@ -141,29 +150,36 @@ decode_results results; // create instance of 'decode_results'
 //END DECLARATIONS HERE
 
 //functions here
+void shearAutoCycle() {
+	if ((digitalRead(32) == LOW) && (encoderTurning == 0)) { // supposed to check if chain forward is active and encoder is turning
+		digitalWrite(4, HIGH);
+	}
+}
 
 void modeCalc() {
+	if ((PINB == 96 || PINB == 97 || PINB == 32 || PINB == 33 || PINB == 64 || PINB == 65) && (digitalRead(32) == LOW)) {
+		mode = 3; // IR CHOSE MANUAL
+		return;
+	}
 	if (PINB == 32 || PINB == 64 || PINB == 96) {
-		mode = 2;
+		mode = 2;  // AUTO MODE
+		return;
+	}
+	if ((PINB == 16 || PINB == 17 || PINB == 48 || PINB == 49 || PINB == 80 || PINB == 81 || PINB == 112 || PINB == 113)&& (digitalRead(32)==HIGH)) {
+		mode = 1; // ABSOLUTE MANUAL chosen from hardwired button
 		return;
 	}
 	if (PINB >= 128) {
 		mode = 0; // possible EStop mode
 		return;
 	}
-	if (PINB == 48 || PINB == 80 || PINB == 112) {
-		mode = 3; // IR CHOSE MANUAL
-		return;
-	}
-	if (PINB == 16 || PINB == 17 || PINB == 48 || PINB == 49 || PINB == 80 || PINB == 81 || PINB == 112 || PINB == 113) {
-		mode = 1; // ABSOLUTE MANUAL chosen from hardwired button
-		return;
-	}
+
 	if (PINB < 32) {
 		initializeOutputs();
 		return;
 	}
 }
+
 void printStateChangeOnce() {
 	if (pscount == 0) {
 		//int lastCarriageState = carriageState;
@@ -178,6 +194,72 @@ void readOutputsReturnFromEStop() {
 	returnStatePinReadC = (PINC);
 	returnStatePinReadK = (PINK);
 	return;
+}
+void buttonReadF() {
+	if (PINF <255) {
+		buttonPressF = PINF;
+		translateButtonPressF();
+		buttonPressF = 0;
+	}
+	else {
+		return;
+	}
+}
+void buttonReadJ() {
+	if (PINJ <255) {
+		buttonPressJ = PINJ;
+		translateButtonPressJ();
+		buttonPressJ = 0;
+	}
+	else {
+		return;
+	}
+}
+void translateButtonPressF() {
+	Serial.println("Button Read F REACHED...................");
+	Serial.println(PINF);
+	switch (buttonPressF) {
+	case 254:
+		stopBridge();
+		break;
+	case 253:
+		leftVacActivate();
+		break;
+	case 251:
+		rightVacActivate();
+		break;
+	case 247:
+		releaseBothVac();
+		break;
+	case 239:
+		Serial.println(" Carriage to Conveyor Carriage to Conveyor Carriage to Conveyor Carriage to Conveyor Carriage to Conveyor Carriage to Conveyor Carriage to Conveyor");
+		carriageToConveyor();
+		break;
+	case 223:
+		Serial.println(" Carriage to Stack Carriage to Stack Carriage to Stack Carriage to Stack Carriage to Stack Carriage to Stack Carriage to Stack");
+		carriageToStack();
+		break;
+	case 191: 
+		Serial.println("RAISING carriage.... RAISING carriage.... RAISING  carriage.....................");
+		raiseCarriage();
+		break;
+	case 127:
+		Serial.println("lower carriage..... lower carriage... lower carriage........");
+		lowerCarriage();
+		break;
+	}
+}
+void translateButtonPressJ() {
+	Serial.println("Button Read J REACHED...................");
+	switch (buttonPressJ)
+	{
+	case 254:
+		forwardChain();
+		break;
+	case 253:
+		reverseChain();
+		break;
+	}
 }
 void IR()
 {
@@ -538,7 +620,7 @@ void EStop() {
 		//returnStatePinReadK = (PINK);  //saves state of motors, relays for returning after EStop
 		readOutputsReturnFromEStop();
 		PORTK = PORTK | B01100000; // Stop forward or reverse bridge motor
-		PORTC = PORTC | B11111110; // EStop relay engaged                       NOTE NOTE NOTE NOTE NOTE NOTE
+		PORTC = PORTC | B11111100; // EStop relay engaged                       NOTE NOTE NOTE NOTE NOTE NOTE
 		PORTC = PORTC & B01111111;
 		//PORTD = B10000000; // EStop beacon LIT
 		digitalWrite(eStopLight, HIGH);
@@ -680,11 +762,11 @@ void stopBridge() {
 	return;
 }
 void stopBridgeAtConveyor() {
-	PORTK = PORTK | B01100000;
+	PORTK = PORTK | B00100000;
 	return;
 }
 void stopBridgeAtStack() {
-	PORTK = PORTK | B01100000;
+	PORTK = PORTK | B01000000;
 	return;
 }
 void raiseCarriage() {
@@ -711,11 +793,14 @@ void activateBothVacs() {
 	return;
 }
 void releaseBothVac() {
-	//if (PIND <= 128) {
+	if (PIND < 128) {
 	PORTK = PORTK | B00011000;
-	//return;
-	//}
 	return;
+	}
+	else {
+		return;
+	}
+	
 }
 void pusherCanRaiseFlagL() {
 	lrt = 1;
@@ -1219,10 +1304,14 @@ void setup()
 	PORTL = B00111111;
 	DDRA = B00000011;  // 6 MSB are inputs
 	PORTA = B11111100;  // only 6 MSbits are being used
-	DDRJ = B11111110;  //set pins 14 and 15 as inputs 15=binary1, 14=binary2
-	PORTJ = B00000001; //set pins 14 and 15 to input pullups
+	DDRJ = B00000000;  //set pins 14 and 15 as inputs 15=binary1, 14=binary2
+	PORTJ = B11111111; //set pins 14 and 15 to input pullups
+	DDRF = B00000000;
+	PORTF = B11111111;
 	//pinMode(18, INPUT_PULLUP);
 	//attachInterrupt(5, pusherStateMachine, FALLING);
+	pinMode(4, OUTPUT);
+	digitalWrite(4, HIGH);
 	pinMode(7, OUTPUT);
 	digitalWrite(7, LOW);
 	pinMode(8, OUTPUT);
@@ -1235,16 +1324,19 @@ void setup()
 	digitalWrite(3, HIGH);
 	pinMode(21, INPUT_PULLUP);
 	digitalWrite(21, HIGH);
-	//pinMode(19, INPUT_PULLUP);  //at stack interrupt to stop bridge motor
-	//digitalWrite(19, HIGH);
-	//pinMode(18, INPUT_PULLUP);  //at conveyor interrupt to stop bridge motor
-	//digitalWrite(18, HIGH);
+	pinMode(19, INPUT_PULLUP);  //at stack interrupt to stop bridge motor                       //IF THINGS GO WRONG... these were commented out
+	digitalWrite(19, HIGH);																		//IF THINGS GO WRONG... these were commented out
+	pinMode(18, INPUT_PULLUP);  //at conveyor interrupt to stop bridge motor					//IF THINGS GO WRONG... these were commented out
+	digitalWrite(18, HIGH);	 //IF THINGS GO WRONG... these were commented out
+	pinMode(20, INPUT_PULLUP);
+	digitalWrite(20, HIGH);
 
 	attachInterrupt(0, pusherCanRaiseFlagL, FALLING);
 	attachInterrupt(1, pusherCanRaiseFlagR, FALLING);
-	attachInterrupt(5, stopBridgeAtConveyor, FALLING);
-	attachInterrupt(4, stopBridgeAtStack, FALLING);
+	attachInterrupt(5, stopBridgeAtConveyor, RISING);
+	attachInterrupt(4, stopBridgeAtStack, RISING);                                       
 	attachInterrupt(2, chainInterruptPusherTrigger, FALLING);
+	//attachInterrupt(3, shearAutoCycle, FALLING);
 	delay(1000);
 	pusherCanRun = 0;
 	pusherState = 0;
@@ -1262,26 +1354,36 @@ void loop() {
 		if (mode == 1) {
 			Serial.println("ABSOLUTE MANUAL MODE");// only 8
 			//PORTH = B11011111;
+			IR();
+			buttonReadF();
+			buttonReadJ();
 			return;
 		}
 		if (mode == 2) {
 			Serial.println("AUTO MODE");
+			Serial.println(carriageState);
 			//PORTH = B11101111;
 					//Main loop before modes
 			IR();
+			buttonReadF();
+			buttonReadJ();
 			carriageStateMachine();
 			IR();
 			//Serial.println("in between functions in the main loop");
 			IR();
 			autoPusherStateMachine();
 			Serial.println(mode);
+			Serial.println(PINF);
 			//MainLoop before modes
 			return;
 		}
 		if (mode == 3) {
 			Serial.println("IR CHOSE MANUAL MODE");
+			Serial.println(digitalRead(11));
 			//PORTH = B11001111;
 			IR();
+			buttonReadF();
+			buttonReadJ();
 			return;
 		}
 		if (mode == 0) {
