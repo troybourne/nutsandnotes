@@ -445,6 +445,7 @@ void initializeOutputs() {
 		PORTK = B01111111;
 		delay(25);
 		EStop();
+		carriageToStack();
 		return;
 	}
 	for (int init = 0; init <= 0; init++) {
