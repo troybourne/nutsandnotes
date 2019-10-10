@@ -1,0 +1,182 @@
+/*
+ Name:		PackingLineController.ino
+ Created:	10/10/2019 8:17:25 AM
+ Author:	TROY
+*/
+// Define code/math related variables
+
+int scaleVal = 0;
+int valAdjust = 0;
+int state = 0;
+
+// Define pin related variables
+int upperVibesOn = 2;
+int floorVibesOn = 3;
+int magBeltOn = 4;
+
+int dumpActuatorOpen = 8;
+int dumpMagAndVibeOn = 9;
+int trickleVibeSource = 10;
+int upperVibeSource = 11;
+int mainFlapClosed = 12;
+int trickleFlapClosed = 13;
+
+
+
+int scale = A0;
+int dumpClosedProx = A2;
+int scaleSimulatorPot = A3;
+int boxPresentContrast = A5;
+
+
+// Define Function Prototypes that use User Types below here or use a .h file
+void mockScalePotentiometer();
+void packingStateMachine();
+void determineState();
+
+
+// Define Mode States
+#define FILLING 0			//
+#define TOPPING 1			//
+#define TRICKLE_HIGH 2		//
+#define TRICKLE_LOW 3		//
+#define CHECK_BOX_TRAY 4	//
+#define DUMP_CYCLE 5		//
+#define ESTOP 6				//
+
+
+void setup()
+{
+	Serial.begin(9600);
+	pinMode(A3, INPUT);
+	pinMode(13, OUTPUT);
+	pinMode(5, OUTPUT);
+	analogReference(DEFAULT);
+
+}
+
+void determineState()
+{
+	if (scaleVal <= 48) {
+		state = CHECK_BOX_TRAY;
+		packingStateMachine();
+		return;
+	}
+	if (scaleVal >= 200) {
+		state = FILLING;
+		packingStateMachine();
+		return;
+	}
+	if (scaleVal >= 150) {
+		state = TOPPING;
+		packingStateMachine();
+		return;
+	}
+	if (scaleVal >= 100) {
+		state = TRICKLE_HIGH;
+		packingStateMachine();
+		return;
+	}
+	if (scaleVal >= 75) {
+		state = TRICKLE_LOW;
+		packingStateMachine();
+		return;
+	}
+	else {
+		return;
+	}
+}
+void mockScalePotentiometer()
+{
+	//acording to this test project... i am looking for val to be between 48 and 246 for 1v - 5v operation
+	scaleVal = (analogRead(A3) / 4.05);
+	if (scaleVal <= 48) {
+
+		analogWrite(trickleVibeSource, 48);
+		Serial.println(scaleVal);
+		return;
+	}
+	if (scaleVal >= 245) {
+		analogWrite(trickleVibeSource, 100);
+		Serial.println("full vibrate trickle");
+		return;
+	}
+	if (scaleVal >= 150) {
+		analogWrite(trickleVibeSource, 100);
+		Serial.println("half vibrate trickle");
+		return;
+	}
+	if (scaleVal >= 100) {
+		analogWrite(trickleVibeSource, 100);
+		Serial.println("quarter vibrate trickle");
+		return;
+	}
+	analogRead(A3);
+	analogWrite(5, scaleVal);
+	//analogWrite(6, 9);
+	Serial.println("quarter vibrate trickle");
+	Serial.println(scaleVal);
+
+}
+void packingStateMachine() {
+	mockScalePotentiometer();
+	determineState();
+	switch (state)
+	{
+	case FILLING: //0
+		Serial.println(state);
+		digitalWrite(upperVibesOn, HIGH);
+		digitalWrite(floorVibesOn, HIGH);
+		analogWrite(trickleVibeSource, 150);
+		Serial.println("full vibrate");
+		break;
+
+	case TOPPING: //1
+		Serial.println(state);
+		digitalWrite(upperVibesOn, HIGH);
+		digitalWrite(floorVibesOn, HIGH);
+		analogWrite(trickleVibeSource, 125);
+		Serial.println("3/4 vibrate trickle");
+		break;
+
+	case TRICKLE_HIGH: //2
+		Serial.println(state);
+		digitalWrite(upperVibesOn, HIGH);
+		digitalWrite(floorVibesOn, LOW);
+		digitalWrite(mainFlapClosed, HIGH);
+		analogWrite(trickleVibeSource, 100);
+		Serial.println("High vibrate trickle");
+		break;
+
+	case TRICKLE_LOW: //3
+		Serial.println(state);
+		digitalWrite(upperVibesOn, HIGH);
+		analogWrite(trickleVibeSource, 75);
+		Serial.println("Low vibrate trickle");
+		break;
+	case CHECK_BOX_TRAY: //4
+		Serial.println(state);
+		analogWrite(trickleVibeSource, 0);
+		digitalWrite(upperVibesOn, LOW);
+		Serial.println("Checking if box present");
+		while (boxPresentContrast == LOW) {
+			Serial.println('waiting for box to be loaded');
+		}
+		Serial.println('Box has been loaded... waiting 1.5 seconds');
+		delay(1500); //LIKELY GET RID OF THIS
+		state = DUMP_CYCLE;
+		return; //needed????
+	case DUMP_CYCLE: //5
+		Serial.println(state);
+		analogWrite(trickleVibeSource, 0);
+		digitalWrite(upperVibesOn, LOW);
+		Serial.println("Checking if box present");
+		return;
+	}
+}
+void loop()
+{
+	mockScalePotentiometer();
+	packingStateMachine();
+
+}
