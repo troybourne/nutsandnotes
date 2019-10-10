@@ -1,0 +1,39 @@
+/*
+ Name:		PWM_Trial_420mA.ino
+ Created:	10/7/2019 3:12:52 PM
+ Author:	TROY
+*/
+int val = 0;
+int valAdjust = 0;
+
+
+
+void setup()
+{
+	Serial.begin(9600);
+	pinMode(A3, INPUT);
+	pinMode(13, OUTPUT);
+	pinMode(5, OUTPUT);
+	analogReference(DEFAULT);
+}
+
+void loop()
+{
+	//acording to this test project... i am looking for val to be between 48 and 246 for 1v - 5v operation
+	val = (analogRead(A3) / 4.05);
+	if (val <= 48) {
+		analogWrite(5, 48);
+		Serial.println(val);
+		return;
+	}
+	if (val >= 245) {
+		analogWrite(5, 245);
+		Serial.println(val);
+		return;
+	}
+	analogRead(A3);
+	analogWrite(5, val);
+	//analogWrite(6, 9);
+	Serial.println(val);
+
+}
