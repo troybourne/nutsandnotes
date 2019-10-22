@@ -1,0 +1,19 @@
+// calibration sketch for HX711
+
+#include "HX711.h" //library needed to comm w/ HX711 https://github.com/bogde/HX711
+
+#define DOUT 6 // pin 6 connect to HX711 DOUT
+#define CLK 5 // pin 5 connect to HX711 CLK
+
+HX711 scale(DOUT, CLK); // init of library
+
+void setup() {
+Serial.begin(9600); //start scale
+scale.set_scale();  //reset scale to zero
+}
+
+void loop() {
+float current_weight=scale.get_unite(20); /get average of 20 scale readings
+float scale_factor=(current_weight/0.145) //divide the result by a known weight
+Serial.println(scale_factor); // print the scale factor to use
+}
