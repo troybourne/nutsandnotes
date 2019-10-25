@@ -1,182 +1,235 @@
 /*
- Name:		PackingLineController.ino
- Created:	10/10/2019 8:17:25 AM
+ Name:		PackingLineWithScaleControl1.ino
+ Created:	10/24/2019 8:58:17 AM
  Author:	TROY
 */
-// Define code/math related variables
+/*
+ Example using the SparkFun HX711 breakout board with a scale
+ By: Nathan Seidle
+ SparkFun Electronics
+ Date: November 19th, 2014
+ License: This code is public domain but you buy me a beer if you use this and we meet someday (Beerware license).
 
-int scaleVal = 0;
-int valAdjust = 0;
-int state = 0;
+ This is the calibration sketch. Use it to determine the calibration_factor that the main example uses. It also
+ outputs the zero_factor useful for projects that have a permanent mass on the scale in between power cycles.
 
-// Define pin related variables
-int upperVibesOn = 2;
-int floorVibesOn = 3;
-int magBeltOn = 4;
+ Setup your scale and start the sketch WITHOUT a weight on the scale
+ Once readings are displayed place the weight on the scale
+ Press +/- or a/z to adjust the calibration_factor until the output readings match the known weight
+ Use this calibration_factor on the example sketch
 
-int dumpActuatorOpen = 8;
-int dumpMagAndVibeOn = 9;
-int trickleVibeSource = 10;
-int upperVibeSource = 11;
-int mainFlapClosed = 12;
-int trickleFlapClosed = 13;
+ This example assumes pounds (lbs). If you prefer kilograms, change the Serial.print(" lbs"); line to kg. The
+ calibration factor will be significantly different but it will be linearly related to lbs (1 lbs = 0.453592 kg).
 
+ Your calibration factor may be very positive or very negative. It all depends on the setup of your scale system
+ and the direction the sensors deflect from zero state
+ This example code uses bogde's excellent library: https://github.com/bogde/HX711
+ bogde's library is released under a GNU GENERAL PUBLIC LICENSE
+ Arduino pin 
+ 2 -> HX711 CLK
+ 3 -> DOUT
+ 5V -> VCC
+ GND -> GND
 
+ Most any pin on the Arduino Uno will be compatible with DOUT/CLK.
 
-int scale = A0;
-int dumpClosedProx = A2;
-int scaleSimulatorPot = A3;
-int boxPresentContrast = A5;
+ The HX711 board can be powered from 2.7V to 5V so the Arduino 5V power should be fine.
 
-
-// Define Function Prototypes that use User Types below here or use a .h file
-void mockScalePotentiometer();
-void packingStateMachine();
-void determineState();
-
-
-// Define Mode States
-#define FILLING 0			//
-#define TOPPING 1			//
-#define TRICKLE_HIGH 2		//
-#define TRICKLE_LOW 3		//
-#define CHECK_BOX_TRAY 4	//
-#define DUMP_CYCLE 5		//
-#define ESTOP 6				//
+*/
+// Define libraries here
+#include "HX711.h"
 
 
-void setup()
-{
-	Serial.begin(9600);
-	pinMode(A3, INPUT);
-	pinMode(13, OUTPUT);
-	pinMode(5, OUTPUT);
-	analogReference(DEFAULT);
+// Define function prototypes here
+void determineStateByWeight(); //this will obtain currentScaleWeight for choosing STATE and assign the STATE, weighing states will recall this at end
+//void stopFloorVibes();
+//void stopAllVibes();
+//void stopMagBelt();
+//void 
 
+
+// Define state machine states here (#define TARE_SCALE 0) etc.
+
+
+
+
+
+
+#define CALIBRATION 0   // only make this available is scale reads below 1 pound
+#define TARING  1                    //ONLY if under 1 pound maybe... if after dumping weight is not within range... run tare()
+#define DETERMINE_STATE_BY_WEIGHT 2
+#define WEIGHING_LOW_WEIGHT  3       // full speed all vibes
+#define WEIGHING_OVER_48_AND_HALF 4         // floor vibes off
+#define WEIGHING_OVER_49 5           // lower vibrators Off, trickle chute slows
+#define TOPPING_OFF_BOX 6            // trickle chute very slow at 49.75
+#define INITIATE_DUMP_CYCLE 7        // if box present and raised and weight >50 DUMP while main scupper not closed DO NOTHING... then determineStateByWeight
+
+
+#define DOUT  7
+#define CLK  6
+
+HX711 scale;
+
+float calibration_factor = 37845.50;  //-7050 worked for my 440lb max scale setup
+int machineState = 0;  //global variable outside of the setup...
+int tareButton = 9;
+void setup() {
+	//to next comment below is setup for scale functionality
+	Serial.begin(115200);  // its a serial device... have to start it
+	Serial.println("HX711 calibration sketch"); //
+	Serial.println("Remove all weight from scale");
+	Serial.println("After readings begin, place known weight on scale");
+	Serial.println("Press + or a to increase calibration factor");
+	Serial.println("Press - or z to decrease calibration factor");
+
+	scale.begin(DOUT, CLK); //the scale reads between the following 2 pins
+	scale.set_scale(); //  set the SCALE value; this val used to convert raw data to "readable" data. (measure units) (float scale = 1.f) ???
+	//scale.tare(); //Reset the scale to 0
+
+	long zero_factor = scale.read_average(); //Get a baseline reading
+	Serial.print("Zero factor: "); //This can be used to remove the need to tare the scale. Useful in permanent scale projects.
+	Serial.println(zero_factor); //the strain gauge position when tare weight is added to load cell sensor
+	pinMode(13, OUTPUT); // i just added a light to trip when weight was exceeded... this can go.
+	digitalWrite(13, LOW);
+	
+	pinMode(9, INPUT_PULLUP);
+	calibrate();
+	//long zero_factor = 187415;
+	scale.tare();
 }
-
-void determineState()
-{
-	if (scaleVal <= 48) {
-		state = CHECK_BOX_TRAY;
-		packingStateMachine();
-		return;
-	}
-	if (scaleVal >= 200) {
-		state = FILLING;
-		packingStateMachine();
-		return;
-	}
-	if (scaleVal >= 150) {
-		state = TOPPING;
-		packingStateMachine();
-		return;
-	}
-	if (scaleVal >= 100) {
-		state = TRICKLE_HIGH;
-		packingStateMachine();
-		return;
-	}
-	if (scaleVal >= 75) {
-		state = TRICKLE_LOW;
-		packingStateMachine();
-		return;
-	}
-	else {
-		return;
-	}
-}
-void mockScalePotentiometer()
-{
-	//acording to this test project... i am looking for val to be between 48 and 246 for 1v - 5v operation
-	scaleVal = (analogRead(A3) / 4.05);
-	if (scaleVal <= 48) {
-
-		analogWrite(trickleVibeSource, 48);
-		Serial.println(scaleVal);
-		return;
-	}
-	if (scaleVal >= 245) {
-		analogWrite(trickleVibeSource, 100);
-		Serial.println("full vibrate trickle");
-		return;
-	}
-	if (scaleVal >= 150) {
-		analogWrite(trickleVibeSource, 100);
-		Serial.println("half vibrate trickle");
-		return;
-	}
-	if (scaleVal >= 100) {
-		analogWrite(trickleVibeSource, 100);
-		Serial.println("quarter vibrate trickle");
-		return;
-	}
-	analogRead(A3);
-	analogWrite(5, scaleVal);
-	//analogWrite(6, 9);
-	Serial.println("quarter vibrate trickle");
-	Serial.println(scaleVal);
-
-}
-void packingStateMachine() {
-	mockScalePotentiometer();
-	determineState();
-	switch (state)
+void weightDrivenStateMachine() {
+	//Serial.println(machineState);
+	//Serial.println(scale.get_units(), 2);
+	switch (machineState)
 	{
-	case FILLING: //0
-		Serial.println(state);
-		digitalWrite(upperVibesOn, HIGH);
-		digitalWrite(floorVibesOn, HIGH);
-		analogWrite(trickleVibeSource, 150);
-		Serial.println("full vibrate");
+	//case CALIBRATION:   //0 only make this available is scale reads below 1 pound
+		//Serial.println("CALIBRATION REACHED CALIBRATION REACHED");
+		//scale.set_scale();
+		//calibrate();
+			//machineState = 2;
+			//break;
+	case TARING:  //1                    //ONLY if under 1 pound maybe... if after dumping weight is not within range... run tare()
+		Serial.println("TARING          TARING   TO  ZERO        TARING");
+		//scale.set_scale();
+		//long zero_factor = scale.read_average();
+		
+		//calibrate();
+		//scale.tare();
+		
+			machineState = 2;
+			break;
+	case DETERMINE_STATE_BY_WEIGHT: //2
+		//Serial.println("DETERMINING STATE BY WEIGHT        DETERMINING STATE BY WEIGHT");
+		determineStateByWeight();
 		break;
+	case WEIGHING_LOW_WEIGHT:  //3       // full speed all vibes
+		//Serial.println("LOW WEIGHT>>>     FULL ON VIBRATE    LOW WEIGHT>>>     FULL ON VIBRATE");
+		break;
+	case WEIGHING_OVER_48_AND_HALF: //4         // floor vibes off
+		//Serial.println("48 and a HALF.... VIBRATE HALF AS FAST");
+		break;
+	case WEIGHING_OVER_49: //5           // lower vibrators Off, trickle chute slows
+		//Serial.println("49 is reached... FLOOR VIBRATORS CEASE");
+		break;
+	case TOPPING_OFF_BOX: //6            // trickle chute very slow at 49.75
+		//Serial.println("ALMOST FULL... UPPER VIBES ONLY TRICKLE     SSSSSSLLLLLOOOOOOWWWWWW");
+		break;
+	case INITIATE_DUMP_CYCLE: //7
+		Serial.println("HOPPER IS FULL     >>>>>>>      CHECK THEN DUMP CYCLE!!!!");
+		break;
+	}
 
-	case TOPPING: //1
-		Serial.println(state);
-		digitalWrite(upperVibesOn, HIGH);
-		digitalWrite(floorVibesOn, HIGH);
-		analogWrite(trickleVibeSource, 125);
-		Serial.println("3/4 vibrate trickle");
-		break;
+}
 
-	case TRICKLE_HIGH: //2
-		Serial.println(state);
-		digitalWrite(upperVibesOn, HIGH);
-		digitalWrite(floorVibesOn, LOW);
-		digitalWrite(mainFlapClosed, HIGH);
-		analogWrite(trickleVibeSource, 100);
-		Serial.println("High vibrate trickle");
-		break;
 
-	case TRICKLE_LOW: //3
-		Serial.println(state);
-		digitalWrite(upperVibesOn, HIGH);
-		analogWrite(trickleVibeSource, 75);
-		Serial.println("Low vibrate trickle");
-		break;
-	case CHECK_BOX_TRAY: //4
-		Serial.println(state);
-		analogWrite(trickleVibeSource, 0);
-		digitalWrite(upperVibesOn, LOW);
-		Serial.println("Checking if box present");
-		while (boxPresentContrast == LOW) {
-			Serial.println('waiting for box to be loaded');
-		}
-		Serial.println('Box has been loaded... waiting 1.5 seconds');
-		delay(1500); //LIKELY GET RID OF THIS
-		state = DUMP_CYCLE;
-		return; //needed????
-	case DUMP_CYCLE: //5
-		Serial.println(state);
-		analogWrite(trickleVibeSource, 0);
-		digitalWrite(upperVibesOn, LOW);
-		Serial.println("Checking if box present");
+void determineStateByWeight() {
+	//scale.set_scale(calibration_factor); //Adjust to this calibration factor
+	if (digitalRead(9) == LOW) {
+		Serial.println("TARING          TARING   TO  ZERO        TARING");
+		Serial.println(tareButton);
+		//scale.tare();
+		machineState = 2;
 		return;
 	}
+	if (scale.get_units() >= 50.05) {
+		machineState = 7;
+		Serial.println("DUMP CYCLE REACHED ALL VIBES OFF");
+		//weightDrivenStateMachine();
+		return;
+	}
+	if (scale.get_units() >= 40) {
+		machineState = 6;
+		Serial.println("TOPPING CYCLE REACHED FLOOR OFF 20% UPPER VIBES");
+		//weightDrivenStateMachine();
+		return;
+	}
+	if (scale.get_units() >= 30) {
+		machineState = 5;
+		Serial.println(" FLOOR VIBES OFF HALF SPEED UPPER VIBES");
+		//weightDrivenStateMachine();
+		return;
+	}
+	if (scale.get_units() >= 20) {
+		machineState = 4;
+		Serial.println("FLOOR VIBES OFF HALF SPEED UPPER VIBES");
+		Serial.println(scale.get_units(), 2);
+		//weightDrivenStateMachine();
+		return;
+	}
+	else if(scale.get_units() <10) {
+		machineState = 3;
+		Serial.println("FULL SPEED EVERYTHING ON..........................");
+		//weightDrivenStateMachine();
+		return;
+	}
+	weightDrivenStateMachine();
+	return;
 }
-void loop()
-{
-	mockScalePotentiometer();
-	packingStateMachine();
 
+void calibrate() {
+
+	scale.set_scale(calibration_factor); //Adjust to this calibration factor
+
+	Serial.print("Reading: ");
+	Serial.print(scale.get_units(), 2);
+	Serial.print(" lbs"); //Change this to kg and re-adjust the calibration factor if you follow SI units like a sane person
+	Serial.print(" calibration_factor: ");
+	Serial.print(calibration_factor);
+	Serial.println();
+
+	if (Serial.available())
+	{
+		char temp = Serial.read();
+		if (temp == 't') {
+			Serial.println("RESETTING SCALE TO ZERO. RESETTING SCALE TO ZERO RESETTING SCALE TO ZERO");
+			scale.tare();
+			return;
+		}
+		if (temp = 'g') {
+			machineState = 2;
+			return;
+		}
+		if (temp == '+' || temp == 'a')
+			calibration_factor += 10;
+		if (temp == '-' || temp == 'z')
+			calibration_factor -= 10;
+		else while (temp != 'g') {
+			machineState = 0;
+		}
+	}
+}
+	
+	
+		
+		
+
+
+
+void loop() {
+	//scale.set_scale(calibration_factor); //Adjust to this calibration factor
+	//calibrate();
+	determineStateByWeight();
+	weightDrivenStateMachine();
+	Serial.println(scale.get_units(), 2);
+	Serial.println(digitalRead(tareButton));
 }
