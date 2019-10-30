@@ -105,7 +105,7 @@ void setup()
 {
 	//Scale Setup info
 	//to next comment below is setup for scale functionality
-	//Serial.begin(115200);  // its a serial device... have to start it
+	Serial.begin(115200);  // its a serial device... have to start it
 	//Serial.println("HX711 calibration sketch"); //
 	//Serial.println("Remove all weight from scale");
 	//Serial.println("After readings begin, place known weight on scale");
@@ -130,9 +130,9 @@ void setup()
 	// Port L Configuration for controlling relays
 	DDRL = B11111111;  //configures PORTL 42-49 as all ouputs
 	//PORTL = PORTL | B00000000;  //Tells PORTL to all be LOW
-	PORTL = 192;
+	PORTL = PORTL & B00000000;
 	DDRA = B00000000; //configures PORTA 22-29 as all inputs
-	PORTA = 0;
+	PINA = PINA | B11111111;
 
 	// LCD SETUP for LIQUIDCRYSTAL DISPLAY
 	lcd.begin(16, 2);              // start the library
@@ -179,8 +179,10 @@ void calibrationStateMachine() {
 	}
 
 }
-void controlStateMachine() {
-
+void controlStateMachine() {  //     ADD SWITCH CASE FOR CONTROLS HERE!!!! NEXT  ALSO... CONTROL will KILL ALL VIBES BUT NOT CHANGE scuppers
+	PORTL = PORTL & B10011111;
+	updateControlDisplay();
+	return;
 }
 void updateControlDisplay() {
 	//lcd printing weight top left
@@ -188,154 +190,4 @@ void updateControlDisplay() {
 	lcd.print("ControlState");
 	lcd.setCursor(0, 1);
 	lcd.print("DownToTempAdjust");
-}
-
-void updateRunDisplay() {
-	//lcd printing weight top left
-	lcd.setCursor(0, 0);
-	lcd.print("wt=");
-	lcd.print(scale.get_units(), 2);
-	//lcd printing Function top right
-	lcd.setCursor(8, 0);
-	lcd.print("RunState");
-
-	lcd.setCursor(0, 1);
-	lcd.print("CurState=");
-	lcd.setCursor(11, 1);
-	lcd.print(runState);
-}
-void lcdButtonRead()
-{
-	lcd.setCursor(0, 0);
-	lcd.print((adc_key_in)/100);
-
-	lcd.setCursor(9, 1);            // move cursor to second line "1" and 9 spaces over
-	lcd.print(millis() / 1000);      // display seconds elapsed since power-up
-
-
-	lcd.setCursor(0, 1);            // move to the begining of the second line
-	lcd_key = read_LCD_buttons();  // read the buttons
-
-	switch (lcd_key)               // depending on which button was pushed, we perform an action
-	{
-	case btnRIGHT:
-	{
-		lcd.print("RIGHT ");
-		break;
-	}
-	case btnLEFT:
-	{
-		// if You need the word "LEFT " shown on the display than use lcd.print("LEFT  ") instead of      lcd.print(adc_key_in) and lcd.print(" v");
-		// the following 2 lines will print the actual threshold voltage present at analog input 0 ; As these buttons are part of a voltage divider, pressing each button creates a different threshold voltage 
-
-		lcd.print("LEFT "); // shows the actual threshold voltage at analog input 0
-
-		break;
-	}
-	case btnUP:
-	{
-		lcd.print("UP   ");
-		//RUNMODESTATE
-			break;
-	}
-	case btnDOWN:
-	{
-		lcd.print("DOWN  ");
-		break;
-	}
-	case btnSELECT:
-	{
-		lcd.print("SELECT");
-		calibrate();
-		break;
-	}
-	case btnNONE:
-	{
-		lcd.print("TEST ");
-		break;
-	}
-	}
-
-}
-void determineState() {
-	if (PORTA >= 128) {
-		controlStateMachine();
-	}
-	if (scale.get_units() <= 10.75) {    //FAST FILLING
-		runState = 0;
-		runStateMachine();
-	}
-	if (scale.get_units() >= 50.05) {  //STOP ALL BOX CHECK
-		runState = 3;
-		runStateMachine();
-	}
-	if (scale.get_units() >= 30.75) {   //TRICKLING
-		runState = 2;
-		runStateMachine();
-	}
-	if (scale.get_units() >= 10.75) {   //TOPPING STOPPING
-		runState = 1;
-		runStateMachine();
-	}
-	//return;
-}
-void runStateMachine() {
-
-	/*
-	#define FAST_FILL 0
-	#define TOPPING_STOPPING 1
-	#define TRICKLING 2
-	#define CHECK_FOR_BOX 3
-	#define DUMP_CYCLE 4
-*/
-	
-	//lcdButtonRead(); this will only be used in control mode
-	//determineState();
-	switch (runState) {
-		determineState();
-
-	case FAST_FILL:				//0
-		//determineState();
-		PORTL = 224;
-		break;
-
-	case TOPPING_STOPPING:		//1
-		//determineState();
-		PORTL = 208;
-		break;
-
-	case TRICKLING:				//2
-		//determineState();
-		lcd.setCursor(11, 1);
-		lcd.print("Trickle");
-		PORTL = 208; 
-		//signal to reduce vibration amplitude from output pin
-		break;
-
-	case CHECK_FOR_BOX:			//3
-		PORTL = 152; // magbelt, mainScupper, trickleScupper
-		lcd.setCursor(11, 1);
-		lcd.print("ChkBox");
-		delay(3000);
-		//while loop to check for box... then runState++
-		runState = 4;
-
-	case DUMP_CYCLE:			//4
-		PORTL = 158;
-		delay(2000);
-		PORTL = 156;
-		lcd.setCursor(11, 1);
-		lcd.print("Dumping");
-		delay(3000);
-		lcd.clear();
-		delay(500);
-		runState = 0;
-		break;
-	}
-	//Serial.println(scale.get_units(), 2);
-}
-void loop() {
-	determineState();
-	updateRunDisplay();
-	runStateMachine();
 }
