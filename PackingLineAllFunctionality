@@ -23,11 +23,9 @@ void runStateMachine();  // toggle will send to RUN SM for determineState during
 void determineState();   // if's check weight and assign FAST FILL, STOPPING TOPPING, TRICKLING, BOX CHECK (box check will advance directly to DUMP CYCLE)
 void updateRunDisplay();   // this code places the correct run display values on the LCD screen
 void updateControlDisplay(); // this code places the correct control display data on the LCD screen
-void ldrBoxCheck();
-void dumpActuatorDelay();
-void setInputFlags();
-void resolveInputFlags();
-void controlMenu();
+void ldrBoxCheck();			// this code determines if the box is present with an LDR light determined resistor
+void dumpActuatorDelay();   // this runs millis for actuator to close after time period
+void controlMenu();			// my homemade menu that comes up when control toggle switch is engaged.
 void navMenu();
 void controlEntryScreen();
 void setHallEffectFlag();
@@ -105,6 +103,8 @@ const int elevatorUpPin = 18;
 #define CLK 16
 #define PWMOUTVIBE1 44
 #define PWMOUTTRICKLEVIBE 45
+
+int prePauseState = 0;
 
 
 #define LDR A8
@@ -194,7 +194,7 @@ void setup()
 	//PORTL = PORTL | B00000000;  //Tells PORTL to all be LOW
 	PORTC = PORTC & B00000000;
 	DDRA = B00000000; //configures PORTA 22-29 as all inputs
-	PINA = PINA | B11111111;
+	PINA = PINA | B11111111;   // pin 29 toggeled LOW will bring to controls StateMachine for variable entry values pin 28 will PAUSE all motors.
 
 	// LCD SETUP for LIQUIDCRYSTAL DISPLAY
 	lcd.begin(16, 2);              // start the library
@@ -223,6 +223,7 @@ void setup()
 	//digitalWrite(hallEffectPin, LOW);
 	lcd.clear();
 	//scale.tare();
+	attachInterrupt(digitalPinToInterrupt(19), setHallEffectFlag, FALLING);
 }
 
 void dumpActuatorDelay() {
@@ -241,6 +242,14 @@ void dumpActuatorDelay() {
 }
 
 void setHallEffectFlag() {
+	hallEffectFlag = 0;
+	if (runState == 5) {
+		runState = 6;
+	}
+	return;
+}
+/*
+void setHallEffectFlag() {
 	Serial.println("READING THE HALL EFFECT SENSOR AND SETTING THE FLAG");
 	bool reading = digitalRead(hallEffectPin);
 		if (reading == 0) {  // 0 means the magnet activated
@@ -253,6 +262,7 @@ void setHallEffectFlag() {
 		return;
 
 	}
+*/
 void dumpMagVibeDelay() {
 	
 	Serial.println("dump Mag Vibe waitng 5 seconds");
@@ -706,8 +716,8 @@ void runStateMachine() {
 		lcd.print("Trickle");
 		PORTC = 208;
 		analogWrite(vib1PinPWM, (maxVibe1Intensity*.25));
-		analogWrite(tricklePinPWM, (maxTrickleIntensity*.25));
-		//                                                                      signal to reduce vibration amplitude from output pin
+		analogWrite(tricklePinPWM, (maxTrickleIntensity*.25));  //      signal to reduce vibration amplitude from output pin
+		hallEffectFlag = 1;
 		break;
 
 	case CHECK_FOR_BOX:			//3
@@ -747,16 +757,17 @@ void runStateMachine() {
 		if (PORTC != 156) {
 			PORTC = 158; //actuator, mag and Dump vibe all on
 		}
-		
+
 		dumpActuatorDelay();
 		//if (dumpActuatorDelayFlag == 1) {
 			//runState = 5;
 			//break;
 		//}
+		
 		break;
 
 	case CLOSE_DUMP_FLAP: //5
-		
+
 		Serial.println("CLOSING DUMP FLAP   5");
 		if (PINC == 158 && currentMillis - dumpCycleStart >= dumpMagVibeDelayTime) {
 			PORTC = 156;
@@ -764,30 +775,30 @@ void runStateMachine() {
 
 		//if prox shows closed runState++
 		dumpMagVibeDelay();
-		setHallEffectFlag();
+		//setHallEffectFlag();
 		//setHallEffectFlag();
 		//if (dumpMagVibeDelayFlag == 0) {
 			//dumpMagVibeDelay();
 			//break;
 		//}
-		//runState = 6;
+		runState = 6;
 		//while (scale.get_units() >= 1.00) {}      // commenting this out on 11/1/2019
 		Serial.print("the hallEffectFlag is set to");
 		Serial.println(hallEffectFlag);
 		break;
 	case STOP_ALL_DUMP: //6
 		PORTC = 152;
-			if (hallEffectFlag == 0) {
-				runState = 7;
-				return;
-			}
-			else {
-				lcd.setCursor(0, 1);
-				lcd.print("MAGFAULT MAGFAULT");
-				PORTC = 0;
-				runState = 8;
-				break;
-			}
+		if (hallEffectFlag == 0) {
+			runState = 7;
+			return;
+		}
+		else {
+			lcd.setCursor(0, 1);
+			lcd.print("MAGFAULT MAGFAULT");
+			PORTC = 0;
+			runState = 8;
+			break;
+		}
 
 	case RESET_FLAGS: //7
 		boxCheckFlag = 0;
@@ -809,21 +820,36 @@ void runStateMachine() {
 		delay(1000);
 		runState = 8;
 		break;
+	case 9:
+		int prePausePortC = PINC;
+		while (PINA == 191) {
+			PORTC = 0;
+			lcd.setCursor(0, 0);
+			lcd.print("   PAUSE MODE   ");
+			lcd.setCursor(0, 1);
+			lcd.print("TurnSwitchToRun ");
+			delay(2000);
+			lcd.clear();
+			delay(1000);
+		}
+		PORTC = prePausePortC;
+		runState = prePauseState;
+		//break;
+		return;
+		//Serial.println(scale.get_units(), 2);
 	}
-	//Serial.println(scale.get_units(), 2);
 }
 void loop() {
-	//scale.set_scale(calibration_factor);
-	Serial.print("HALL EFFECT FLAG IS.............");
+		//scale.set_scale(calibration_factor);
 	Serial.println(hallEffectFlag);
-	Serial.print("HALL EFFECT PIN IS.............");
-	Serial.println(digitalRead(hallEffectPin));
-	//Serial.println(digitalRead(hallEffectPin));
-	//Serial.println(firstDropOffPercentage[8]);
-	//Serial.println(trickleDropOffPercentage[3]);
-	//Serial.println(PINA);
-	determineState();
-	updateRunDisplay();
-	runStateMachine();
-	//return;
-}
+	if (PINA == 191 && runState <= 3) {
+		prePauseState = runState;
+		delay(20);
+		runState = 9;
+		return;
+	}
+		determineState();
+		updateRunDisplay();
+		runStateMachine();
+		//return;
+	}
