@@ -1,9 +1,9 @@
 // Visual Micro is in vMicro>General>Tutorial Mode
 // 
 /*
-    Name:       PackingLineBuildOut1.ino
-    Created:	10/29/2019 3:20:35 PM
-    Author:     ACORN\TROY
+	Name:       PackingLineBuildOut1.ino
+	Created:	10/29/2019 3:20:35 PM
+	Author:     ACORN\TROY
 
 	NOTES ABOUT THE SYSTEM...
 	E-STOP BUTTON should be DPDT... with 1 circuit telling arduino... and one circuit interupting power to main MC
@@ -30,6 +30,7 @@ void resolveInputFlags();
 void controlMenu();
 void navMenu();
 void controlEntryScreen();
+void setHallEffectFlag();
 
 //
 
@@ -62,24 +63,25 @@ double adc_key_in = 0;  //this is the value being read on A0 (analogRead(0)
 int calibrationState = 0;
 int runState = 0;
 unsigned long dumpCycleStart = 0;
-unsigned long currentMillis =0;
+unsigned long currentMillis = 0;
+
 int dumpActuatorDelayTime = 2500;
 int dumpMagVibeDelayTime = 5000;
 int menuScreenNum = 0;
 int entryScreenNum = 0;
 double dumpWeight = 50.03;
 double mainScupperActuatorWeight = 48;
-double lowestTrickleIntensityWeight =49.7;
+double lowestTrickleIntensityWeight = 49.7;
 
 int tricklePinPWM = 45;
 int vib1PinPWM = 44;
 int maxVibe1Intensity = 245;
 int maxTrickleIntensity = 245;
-int firstDropOffPercentage[10] = {40,45,50,55,60,65,70,75,80,85};
+int firstDropOffPercentage[10] = { 40,45,50,55,60,65,70,75,80,85 };
 int trickleDropOffPercentage[10] = { 2,4,6,8,10,12,14,16,18,20 };
 double setFirstDropOffPercentage = (firstDropOffPercentage[2] / 100); //this holds the first drop off percentage variable 
-double setTrickleDropOffPercentage =(trickleDropOffPercentage[3] /100); //this holds the trickle percentage variable
-const int elevatorUpPin = 18; 
+double setTrickleDropOffPercentage = (trickleDropOffPercentage[3] / 100); //this holds the trickle percentage variable
+const int elevatorUpPin = 18;
 
 
 #define btnRIGHT  0
@@ -200,7 +202,7 @@ void setup()
 	lcd.print("Velleman VMA203"); // print a simple message
 	delay(400);
 	lcd.clear();
-	
+
 	lcd.setCursor(0, 0);
 	lcd.print("zero factor: ");
 	lcd.setCursor(3, 1);
@@ -228,26 +230,41 @@ void dumpActuatorDelay() {
 	Serial.println(currentMillis);
 	Serial.println(dumpCycleStart);
 	if (currentMillis - dumpCycleStart >= dumpActuatorDelayTime) {
+		PORTC = 156;
 		//dumpActuatorDelayFlag = 1;
-		Serial.println("Dump Actuator Delay Flag Set 1");
-		runState = 5;
+		//Serial.println("Dump Actuator Delay Flag Set 1");
+		//runState = 5;
+		dumpMagVibeDelay();
 		return;
 	}
 	return;
 }
+
+void setHallEffectFlag() {
+	Serial.println("READING THE HALL EFFECT SENSOR AND SETTING THE FLAG");
+	bool reading = digitalRead(hallEffectPin);
+		if (reading == 0) {  // 0 means the magnet activated
+			hallEffectFlag = 0;					// set flag to 0 which says theres no Fault
+		}
+		else {
+			hallEffectFlag = 1;  // which means there's a fault
+		}
+		runState = 6;
+		return;
+
+	}
 void dumpMagVibeDelay() {
-	currentMillis = millis();
-	hallEffectFlag = digitalRead(hallEffectPin);
+	
 	Serial.println("dump Mag Vibe waitng 5 seconds");
+	
 	if (currentMillis - dumpCycleStart >= dumpMagVibeDelayTime) {
 		//dumpMagVibeDelayFlag = 1;
 		//Serial.println(dumpMagVibeDelayFlag);
-		runState = 6;
-		return;
+			runState = 5;
+			return;
+		}
 	}
-	Serial.println("dumpMagVibeDelayFlag STILL 0");
-	return;
-}
+
 void ldrBoxCheck() {
 	int boxCheck = analogRead(LDR);
 	Serial.println(runState);
@@ -286,7 +303,7 @@ void calibrate() {
 	/*
 	if (read_LCD_buttons() == btnSELECT)
 	{
-		
+
 		if (read_LCD_buttons() == btnRIGHT) {
 			lcd.print("RESETTING SCALE TO ZERO. RESETTING SCALE TO ZERO RESETTING SCALE TO ZERO");
 			scale.tare();
@@ -308,7 +325,7 @@ void calibrationStateMachine() {
 	lcd.setCursor(0, 0);
 	lcd.print("reading button");
 	switch (calibrationState) {
-		
+
 	case 0:
 		lcd.setCursor(0, 1);
 		lcd.print("case 0");
@@ -431,7 +448,7 @@ void controlMenu() {
 			lcd.setCursor(0, 1);
 			lcd.print(calibration_factor);
 			scale.set_scale(calibration_factor);
-			
+
 			if (read_LCD_buttons() == btnUP) {
 				calibration_factor = calibration_factor + 50;
 				delay(200);
@@ -515,7 +532,7 @@ void updateRunDisplay() {
 void lcdButtonRead()
 {
 	lcd.setCursor(0, 0);
-	lcd.print((adc_key_in)/100);
+	lcd.print((adc_key_in) / 100);
 
 	lcd.setCursor(9, 1);            // move cursor to second line "1" and 9 spaces over
 	lcd.print(millis() / 1000);      // display seconds elapsed since power-up
@@ -544,7 +561,7 @@ void lcdButtonRead()
 	{
 		lcd.print("UP   ");
 		//RUNMODESTATE
-			break;
+		break;
 	}
 	case btnDOWN:
 	{
@@ -581,7 +598,7 @@ void controlLCDButtonRead()
 	{
 	case btnRIGHT:    //Enter screen Num
 	{
-		
+
 		break;
 	}
 	case btnLEFT:
@@ -597,10 +614,10 @@ void controlLCDButtonRead()
 	{	if (menuScreenNum == 5) {
 		menuScreenNum = 0;
 	}
-		menuScreenNum = menuScreenNum + 1;
-		delay(350);
-		//RUNMODESTATE
-		break;
+	menuScreenNum = menuScreenNum + 1;
+	delay(350);
+	//RUNMODESTATE
+	break;
 	}
 	case btnDOWN:
 	{
@@ -645,15 +662,15 @@ void determineState() {
 		return;
 	}
 	if (scale.get_units() <= mainScupperActuatorWeight) //    //FAST FILLING
-			runState = 0;
-		runStateMachine();
-		return;
-	}
-	
+		runState = 0;
+	runStateMachine();
+	return;
+}
 
 
 
-	//return;
+
+//return;
 void runStateMachine() {
 
 	/*
@@ -663,9 +680,9 @@ void runStateMachine() {
 	#define CHECK_FOR_BOX 3
 	#define DUMP_CYCLE 4
 */
-	
-	//lcdButtonRead(); this will only be used in control mode
-	//determineState();
+
+//lcdButtonRead(); this will only be used in control mode
+//determineState();
 	switch (runState) {
 		//determineState();
 
@@ -727,7 +744,10 @@ void runStateMachine() {
 		Serial.println("ALL DUMP ON REACHED   4");
 		lcd.setCursor(11, 1);
 		lcd.print("Dumping");
-		PORTC = PORTC | 158; //actuator, mag and Dump vibe all on
+		if (PORTC != 156) {
+			PORTC = 158; //actuator, mag and Dump vibe all on
+		}
+		
 		dumpActuatorDelay();
 		//if (dumpActuatorDelayFlag == 1) {
 			//runState = 5;
@@ -736,48 +756,69 @@ void runStateMachine() {
 		break;
 
 	case CLOSE_DUMP_FLAP: //5
+		
 		Serial.println("CLOSING DUMP FLAP   5");
-		if (PINC == 158) {
+		if (PINC == 158 && currentMillis - dumpCycleStart >= dumpMagVibeDelayTime) {
 			PORTC = 156;
 		}
 
 		//if prox shows closed runState++
 		dumpMagVibeDelay();
+		setHallEffectFlag();
+		//setHallEffectFlag();
 		//if (dumpMagVibeDelayFlag == 0) {
 			//dumpMagVibeDelay();
 			//break;
 		//}
 		//runState = 6;
 		//while (scale.get_units() >= 1.00) {}      // commenting this out on 11/1/2019
-
+		Serial.print("the hallEffectFlag is set to");
+		Serial.println(hallEffectFlag);
 		break;
 	case STOP_ALL_DUMP: //6
-		PORTC = PORTC | 128;
-		while (hallEffectFlag == 1) {
-			if (digitalRead(hallEffectPin) == 1) {
-				lcd.setCursor(0, 1);
-				lcd.print("MAGFAULT MAGFAULT");
+		PORTC = 152;
+			if (hallEffectFlag == 0) {
+				runState = 7;
 				return;
 			}
-			lcd.clear();
-		hallEffectFlag = 1;
-		runState = 7;
-		break;
-	}
+			else {
+				lcd.setCursor(0, 1);
+				lcd.print("MAGFAULT MAGFAULT");
+				PORTC = 0;
+				runState = 8;
+				break;
+			}
+
 	case RESET_FLAGS: //7
-		//boxCheckFlag = 0;
-		//dumpActuatorDelayFlag = 0;
-		//dumpMagVibeDelayFlag = 0;
+		boxCheckFlag = 0;
+		dumpActuatorDelayFlag = 0;
+		dumpMagVibeDelayFlag = 0;
+		hallEffectFlag = 0;
+		delay(50);
 		// while (scale.get_units() >= 1.00) {}      // commenting this out on 11/1/2019
 		runState = 0;
+		break;
+	case 8:
+		Serial.println("MAGFAULT MAGFAULT MAGFAULT MAGFAULT");
+		lcd.setCursor(0, 0);
+		lcd.print(" SERVICE NEEDED ");
+		lcd.setCursor(0, 1);
+		lcd.print("  Magnet Fault  ");
+		delay(2000);
+		lcd.clear();
+		delay(1000);
+		runState = 8;
 		break;
 	}
 	//Serial.println(scale.get_units(), 2);
 }
 void loop() {
 	//scale.set_scale(calibration_factor);
+	Serial.print("HALL EFFECT FLAG IS.............");
 	Serial.println(hallEffectFlag);
+	Serial.print("HALL EFFECT PIN IS.............");
 	Serial.println(digitalRead(hallEffectPin));
+	//Serial.println(digitalRead(hallEffectPin));
 	//Serial.println(firstDropOffPercentage[8]);
 	//Serial.println(trickleDropOffPercentage[3]);
 	//Serial.println(PINA);
