@@ -63,8 +63,8 @@ int runState = 0;
 unsigned long dumpCycleStart = 0;
 unsigned long currentMillis = 0;
 
-int dumpActuatorDelayTime = 2500;
-int dumpMagVibeDelayTime = 5000;
+int dumpActuatorDelayTime = 2000;
+int dumpMagVibeDelayTime = 3000;
 int menuScreenNum = 0;
 int entryScreenNum = 0;
 double dumpWeight = 50.03;
@@ -80,7 +80,7 @@ int trickleDropOffPercentage[10] = { 2,4,6,8,10,12,14,16,18,20 };
 double setFirstDropOffPercentage = (firstDropOffPercentage[2] / 100); //this holds the first drop off percentage variable 
 double setTrickleDropOffPercentage = (trickleDropOffPercentage[3] / 100); //this holds the trickle percentage variable
 const int elevatorUpPin = 18;
-
+int LDRThreshold = 550;
 
 #define btnRIGHT  0
 #define btnUP     1
@@ -105,6 +105,7 @@ const int elevatorUpPin = 18;
 #define PWMOUTTRICKLEVIBE 45
 
 int prePauseState = 0;
+int boxCheck2 = 0;
 
 
 #define LDR A8
@@ -117,7 +118,7 @@ bool hallEffectFlag = 1;
 HX711 scale;
 
 
-float calibration_factor = 37845.50;
+float calibration_factor = 43545.50; // it was 37845.5 for the other scale... the S beam rough 43545.5
 //int 
 // read the buttons
 int read_LCD_buttons()
@@ -277,8 +278,8 @@ void dumpMagVibeDelay() {
 
 void ldrBoxCheck() {
 	int boxCheck = analogRead(LDR);
-	Serial.println(runState);
-	if (boxCheck <= 870 && digitalRead(elevatorUpPin) == LOW) {
+	Serial.println(boxCheck);
+	if (boxCheck <= LDRThreshold && digitalRead(elevatorUpPin) == LOW) {
 		//boxCheckFlag = 1;
 		dumpCycleStart = millis();
 		runState = 4;
@@ -471,6 +472,32 @@ void controlMenu() {
 		}
 		menuScreenNum = 0;
 		break;
+	case 6:
+		int ldrReading = analogRead(LDR);
+		lcd.setCursor(0, 0);
+		lcd.print("CurrentLevel=");
+		lcd.setCursor(13, 0);
+		lcd.print(ldrReading);
+		lcd.setCursor(0, 1);
+		lcd.print("                ");
+		//lcdButtonRead();
+		if (read_LCD_buttons() == btnSELECT) {
+			while (read_LCD_buttons() != btnLEFT) {
+				lcd.setCursor(0, 0);
+				lcd.print("Up+Dn-LightSens");
+				lcd.setCursor(0, 1);
+				lcd.print(LDRThreshold);
+				if (read_LCD_buttons() == btnUP) {
+					LDRThreshold = LDRThreshold + 1;
+					delay(200);
+				}
+				if (read_LCD_buttons() == btnDOWN) {
+					LDRThreshold = LDRThreshold - 1;
+					delay(200);
+				}
+			}
+		}
+		break;
 	}
 }
 void navMenu() {
@@ -505,6 +532,11 @@ void controlEntryScreen() {
 		lcd.setCursor(0, 0);
 		lcd.print("ChgTempAdjustCal");
 
+		break;
+
+	case 6:
+		lcd.setCursor(0, 0);
+		lcd.print("ChgLightSens");
 		break;
 	}
 }
@@ -621,7 +653,7 @@ void controlLCDButtonRead()
 		break;
 	}
 	case btnUP:
-	{	if (menuScreenNum == 5) {
+	{	if (menuScreenNum == 6) {
 		menuScreenNum = 0;
 	}
 	menuScreenNum = menuScreenNum + 1;
@@ -630,7 +662,12 @@ void controlLCDButtonRead()
 	break;
 	}
 	case btnDOWN:
-	{
+	{ 
+		if (menuScreenNum == 0) {
+		menuScreenNum = 6;
+		delay(350);
+		break;
+	}
 		menuScreenNum = menuScreenNum - 1;
 		delay(350);
 		break;
@@ -841,6 +878,8 @@ void runStateMachine() {
 }
 void loop() {
 		//scale.set_scale(calibration_factor);
+	boxCheck2 = analogRead(LDR);
+	Serial.println(boxCheck2);
 	Serial.println(hallEffectFlag);
 	if (PINA == 191 && runState <= 3) {
 		prePauseState = runState;
