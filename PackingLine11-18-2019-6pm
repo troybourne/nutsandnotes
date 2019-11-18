@@ -66,7 +66,7 @@ int entryScreenNum = 0;
 double dumpWeight = 50;
 double initialTaperScuppersOpen = 48;
 double lowestTrickleIntensityWeight = 49;
-double mainScupperCloses = 48;
+double mainScupperClosesWeight = 48;
 double vibeTaperStartWeight = 46.5;
 double vibeTaperEndWeight = 49.5;
 double taperRange = (vibeTaperEndWeight - vibeTaperStartWeight);
@@ -705,12 +705,12 @@ void determineState() {
 		runStateMachine();
 		return;
 	}
-	if (scale.get_units() >= mainScupperCloses) {   //TOPPING STOPPING
+	if (scale.get_units() >= mainScupperClosesWeight) {   //TOPPING STOPPING
 		runState = 1;
 		runStateMachine();
 		return;
 	}
-	if (scale.get_units() <= initialTaperScuppersOpen) //    //FAST FILLING
+	if (scale.get_units() <= mainScupperClosesWeight) //    //FAST FILLING
 		runState = 0;
 	runStateMachine();
 	return;
