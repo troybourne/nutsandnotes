@@ -1,0 +1,934 @@
+// Visual Micro is in vMicro>General>Tutorial Mode
+// 
+/*
+    Name:       PackingLineControllinoBuild.ino
+    Created:	11/18/2019 8:21:14 AM
+    Author:     ACORN\TROY
+*/
+
+// Define User Types below here or use a .h file
+//
+
+// Define Function Prototypes that use User Types below here or use a .h file
+//void read_LCD_buttons();
+void controlStateMachine(); // toggle will initiate a control SM for ManualDumpThenTare, TempAdjust, SetDumpTriggerWeight
+void calibrate();  // this will calibrate a load cell with the calibration factor, LCD buttons will inc dec to calibration weights
+void calibrationStateMachine();  // this will live in calibrate for button assign to inc dec enter
+void lcdButtonRead();  // this is SM which reads the built in LCD buttons
+void runStateMachine();  // toggle will send to RUN SM for determineState during typical run operation
+void determineState();   // if's check weight and assign FAST FILL, STOPPING TOPPING, TRICKLING, BOX CHECK (box check will advance directly to DUMP CYCLE)
+void updateRunDisplay();   // this code places the correct run display values on the LCD screen
+void updateControlDisplay(); // this code places the correct control display data on the LCD screen
+void ldrBoxCheck();			// this code determines if the box is present with an LDR light determined resistor
+void dumpActuatorDelay();   // this runs millis for actuator to close after time period
+void controlMenu();			// my homemade menu that comes up when control toggle switch is engaged.
+void navMenu();
+void controlEntryScreen();
+void setHallEffectFlag();
+
+//
+
+
+// Define Functions below here or use other .ino or cpp files
+//
+
+// The setup() function runs once each time the micro-controller starts
+//Sample using LiquidCrystal library
+#include <LiquidCrystal.h>  // library for VELLEMAN VMA203 16x2 LCD with 5 buttons (to AO pin using resistors) and a resest button
+#include "HX711.h"       // this is the library for the 24 bit amplifier card typically used with load cells... 
+
+
+/*******************************************************
+
+This program will test the LCD panel and the buttons
+
+********************************************************/
+
+// select the pins used on the LCD panel
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7);  //this assigns the correct pins for the LCD shield... this is EXACTLY HOW the shield plugs in... DON'T CHANGE.
+
+// define pins used
+#define controlToggleSwitch 29
+
+
+// define some values used by the panel and buttons 
+int lcd_key = 0;   //this is the switch (lcd_key) that holds the button assignments for StateMachine operations of buttons (btnRight, btnUP, etc.)
+double adc_key_in = 0;  //this is the value being read on A0 (analogRead(0)
+int calibrationState = 0;
+int runState = 0;
+unsigned long dumpCycleStart = 0;
+unsigned long currentMillis = 0;
+
+int dumpActuatorDelayTime = 2000;
+int dumpMagVibeDelayTime = 3000;
+int menuScreenNum = 0;
+int entryScreenNum = 0;
+double dumpWeight = 50;
+double mainScupperActuatorWeight = 48;
+double lowestTrickleIntensityWeight = 49;
+double lowVibeOffWeight = 48;
+double vibeTaperStartWeight = 46.5;
+double vibeTaperEndWeight = 49.5;
+double taperRange = (vibeTaperEndWeight - vibeTaperStartWeight);
+
+int tricklePinPWM = 45;
+int vib1PinPWM = 44;
+int maxVibe1Intensity = 235;
+int maxTrickleIntensity = 230;
+int firstDropOffPercentage[10] = { 40,45,50,55,60,65,70,75,80,85 };
+int trickleDropOffPercentage[10] = { 2,4,6,8,10,12,14,16,18,20 };
+double setFirstDropOffPercentage = (firstDropOffPercentage[2] / 100); //this holds the first drop off percentage variable 
+double setTrickleDropOffPercentage = (trickleDropOffPercentage[3] / 100); //this holds the trickle percentage variable
+const int elevatorUpPin = 18;
+int LDRThreshold = 550;
+
+#define btnRIGHT  0
+#define btnUP     1
+#define btnDOWN   2
+#define btnLEFT   3
+#define btnSELECT 4
+#define btnNONE   5
+
+#define FAST_FILL 0
+#define TOPPING_STOPPING 1
+#define TRICKLING 2
+#define CHECK_FOR_BOX 3
+#define ALL_DUMP_ON 4
+#define CLOSE_DUMP_FLAP 5
+#define STOP_ALL_DUMP 6
+#define RESET_FLAGS 7
+
+#define hallEffectPin 19
+#define DOUT 17
+#define CLK 16
+#define PWMOUTVIBE1 44
+#define PWMOUTTRICKLEVIBE 45
+
+int prePauseState = 0;
+int boxCheck2 = 0;
+
+
+#define LDR A8
+bool boxCheckFlag = 0;
+bool dumpActuatorDelayFlag = 0;
+bool dumpMagVibeDelayFlag = 0;
+bool hallEffectFlag = 1;
+
+
+HX711 scale;
+
+
+float calibration_factor = 43395.50; // it was 37845.5 for the other scale... the S beam rough 43545.5
+//int 
+// read the buttons
+int read_LCD_buttons()
+{
+	adc_key_in = analogRead(0);      // read the value from the sensor 
+	// my buttons when read are centered at these valies: 0, 144, 329, 504, 741
+	// we add approx 50 to those values and check to see if we are close
+	//if (adc_key_in > 1000) return btnNONE; // We make this the 1st option for speed reasons since it will be the most likely result
+	// For V1.1 us this threshold
+	/*
+	if (adc_key_in < 50)   return btnRIGHT;
+	if (adc_key_in < 250)  return btnUP;
+	if (adc_key_in < 450)  return btnDOWN;
+	if (adc_key_in < 650)  return btnLEFT;
+	if (adc_key_in < 850)  return btnSELECT;
+   */
+   // For V1.0 comment the other threshold and use the one below:
+
+	if (adc_key_in < 50)   return btnRIGHT;
+	if (adc_key_in < 195)  return btnUP;
+	if (adc_key_in < 380)  return btnDOWN;
+	if (adc_key_in < 555)  return btnLEFT;
+	if (adc_key_in < 790)  return btnSELECT;
+	return btnNONE;  // when all others fail, return this...
+}
+//int read_run_machine_state() {
+	//if 
+//}
+
+//INPUT & BUTTON LOGIC
+
+
+//LCD Menu Logic TRIAL 
+/*
+const int numOfScreens = 5;
+int currentScreen = 0;
+String screens[numOfScreens][2] = {
+{"SetDumpWeight","Wgt"},
+{"TrickleThresh", "Wgt"},
+{"VibHalfIntens","PWM"},
+{"VibTricklInten","PWM"},
+{"TempAdj", "Num"}
+};
+int parameters[numOfScreens];
+*/
+void setup()
+{
+	//Scale Setup info
+	//to next comment below is setup for scale functionality
+	Serial.begin(9600);  // its a serial device... have to start it
+	//Serial.println("HX711 calibration sketch"); //
+	//Serial.println("Remove all weight from scale");
+	//Serial.println("After readings begin, place known weight on scale");
+	//Serial.println("Press + or a to increase calibration factor");
+	//Serial.println("Press - or z to decrease calibration factor");
+
+	scale.begin(DOUT, CLK); //the scale reads between the following 2 pins
+	scale.set_scale(calibration_factor); //  set the SCALE value; this val used to convert raw data to "readable" data. (measure units) (float scale = 1.f) ???
+	//scale.tare(); //Reset the scale to 0
+
+	//long zero_factor = scale.read_average(); //Get a baseline reading
+	int zero_factor = 3183790;
+	Serial.print("Zero factor: "); //This can be used to remove the need to tare the scale. Useful in permanent scale projects.
+	Serial.println(zero_factor); //the strain gauge position when tare weight is added to load cell sensor
+	pinMode(13, OUTPUT); // i just added a light to trip when weight was exceeded... this can go.
+	digitalWrite(13, LOW);
+
+	pinMode(9, INPUT_PULLUP);
+	calibrate();
+	//long zero_factor = 187415;
+	scale.tare();
+
+	// Port L Configuration for controlling relays
+	DDRC = B11111111;  //configures PORTL 42-49 as all ouputs
+	//PORTL = PORTL | B00000000;  //Tells PORTL to all be LOW
+	PORTC = PORTC & B00000000;
+	DDRA = B00000000; //configures PORTA 22-29 as all inputs
+	PINA = PINA | B11111111;   // pin 29 toggeled LOW will bring to controls StateMachine for variable entry values pin 28 will PAUSE all motors.
+
+	// LCD SETUP for LIQUIDCRYSTAL DISPLAY
+	lcd.begin(16, 2);              // start the library
+	lcd.setCursor(0, 0);
+	lcd.print("Velleman VMA203"); // print a simple message
+	delay(400);
+	lcd.clear();
+
+	lcd.setCursor(0, 0);
+	lcd.print("zero factor: ");
+	lcd.setCursor(3, 1);
+	lcd.print(zero_factor); //the strain gauge position when tare weight is added to load cell sensor
+	delay(400);
+	//pinMode(13, OUTPUT); // i just added a light to trip when weight was exceeded... this can go.
+	//digitalWrite(13, LOW);
+
+	//pinMode(9, INPUT_PULLUP);
+	//long zero_factor = 187415;
+	//scale.tare();
+	//pinMode(controlToggleSwitch, INPUT_PULLUP);
+	pinMode(vib1PinPWM, OUTPUT);
+	analogWrite(vib1PinPWM, maxVibe1Intensity);
+	pinMode(elevatorUpPin, INPUT_PULLUP);// microswitch to detect elevator is up, closed when up and shorts pin 19 to ground.
+	digitalWrite(elevatorUpPin, HIGH);
+	pinMode(hallEffectPin, INPUT_PULLUP);
+	//digitalWrite(hallEffectPin, LOW);
+	lcd.clear();
+	//scale.tare();
+	attachInterrupt(digitalPinToInterrupt(19), setHallEffectFlag, FALLING);
+}
+
+void dumpActuatorDelay() {
+	currentMillis = millis();
+	Serial.println(currentMillis);
+	Serial.println(dumpCycleStart);
+	if (currentMillis - dumpCycleStart >= dumpActuatorDelayTime) {
+		PORTC = 156;
+		//dumpActuatorDelayFlag = 1;
+		//Serial.println("Dump Actuator Delay Flag Set 1");
+		//runState = 5;
+		dumpMagVibeDelay();
+		return;
+	}
+	return;
+}
+
+void setHallEffectFlag() {
+	hallEffectFlag = 0;
+	if (runState == 5) {
+		runState = 6;
+	}
+	return;
+}
+/*
+void setHallEffectFlag() {
+	Serial.println("READING THE HALL EFFECT SENSOR AND SETTING THE FLAG");
+	bool reading = digitalRead(hallEffectPin);
+		if (reading == 0) {  // 0 means the magnet activated
+			hallEffectFlag = 0;					// set flag to 0 which says theres no Fault
+		}
+		else {
+			hallEffectFlag = 1;  // which means there's a fault
+		}
+		runState = 6;
+		return;
+
+	}
+*/
+void dumpMagVibeDelay() {
+
+	Serial.println("dump Mag Vibe waitng 5 seconds");
+
+	if (currentMillis - dumpCycleStart >= dumpMagVibeDelayTime) {
+		//dumpMagVibeDelayFlag = 1;
+		//Serial.println(dumpMagVibeDelayFlag);
+		runState = 5;
+		return;
+	}
+}
+
+void ldrBoxCheck() {
+	int boxCheck = analogRead(LDR);
+	Serial.println(boxCheck);
+	if (boxCheck <= LDRThreshold && digitalRead(elevatorUpPin) == LOW) {
+		//boxCheckFlag = 1;
+		dumpCycleStart = millis();
+		runState = 4;
+		//runStateMachine();
+	}
+	else {
+		//boxCheckFlag = 0;
+		runState = 3;
+		//runStateMachine();
+	}
+	//runState = 3;
+	//runStateMachine();
+	return;
+}
+void calibrate() {
+	//lcd.setCursor(0, 0);
+	//lcd.print("CalModeReached");
+	//calibrationState = 0;
+	//calibrationStateMachine();
+	//delay(1500); 
+	//lcd.clear();
+	//calibrationStateMachine();
+	//scale.set_scale(calibration_factor); //Adjust to this calibration factor                       JUST COMMENTED OUT
+	lcd.setCursor(0, 0);
+	lcd.print("Reads:");
+	lcd.setCursor(8, 0);
+	lcd.print(scale.get_units(), 2);
+	lcd.setCursor(14, 0);
+	lcd.print("lbs"); //Change this to kg and re-adjust the calibration factor if you follow SI units like a sane person
+	lcd.setCursor(0, 1);
+	lcd.print(calibration_factor);
+	/*
+	if (read_LCD_buttons() == btnSELECT)
+	{
+
+		if (read_LCD_buttons() == btnRIGHT) {
+			lcd.print("RESETTING SCALE TO ZERO. RESETTING SCALE TO ZERO RESETTING SCALE TO ZERO");
+			scale.tare();
+			return;
+		}
+		if (read_LCD_buttons() == btnUP) {
+			calibration_factor += 10;
+		}
+
+		if (read_LCD_buttons() == btnDOWN) {
+			calibration_factor -= 10;
+		}
+
+	}
+	*/
+	return;
+}
+void calibrationStateMachine() {
+	lcd.setCursor(0, 0);
+	lcd.print("reading button");
+	switch (calibrationState) {
+
+	case 0:
+		lcd.setCursor(0, 1);
+		lcd.print("case 0");
+		delay(2000);
+		break;
+	}
+
+}
+void controlMenu() {
+	Serial.println("controlMenu reached");
+	Serial.println(menuScreenNum);
+	switch (menuScreenNum)
+	{
+	case 0:
+		lcd.setCursor(0, 0);
+		lcd.print("ChooseMenuUpDown");
+		lcd.setCursor(0, 1);
+		lcd.print("Press Up or Down");
+		break;
+	case 1:
+		lcd.setCursor(0, 0);
+		lcd.print("SetDumpWeight   ");
+		lcd.setCursor(0, 1);
+		lcd.print("                ");
+		//lcdButtonRead();
+		if (read_LCD_buttons() == btnSELECT) {
+			while (read_LCD_buttons() != btnLEFT) {
+				lcd.setCursor(0, 0);
+				lcd.print("INC/DEC DumpWgt.");
+				lcd.setCursor(0, 1);
+				lcd.print(dumpWeight);
+				if (read_LCD_buttons() == btnUP) {
+					dumpWeight = dumpWeight + .03;
+					delay(200);
+				}
+				if (read_LCD_buttons() == btnDOWN) {
+					dumpWeight = dumpWeight - .03;
+					delay(200);
+				}
+			}
+		}
+		break;
+	case 2:
+		lcd.setCursor(0, 0);
+		lcd.print("SetMainScupActWt");
+		lcd.setCursor(0, 1);
+		lcd.print("                ");
+		//lcdButtonRead();
+		if (read_LCD_buttons() == btnSELECT) {
+			while (read_LCD_buttons() != btnLEFT) {
+				lcd.setCursor(0, 0);
+				lcd.print("Up+Dn- MnScupWgt");
+				lcd.setCursor(0, 1);
+				lcd.print(mainScupperActuatorWeight);
+				if (read_LCD_buttons() == btnUP) {
+					mainScupperActuatorWeight = mainScupperActuatorWeight + .03;
+					delay(200);
+				}
+				if (read_LCD_buttons() == btnDOWN) {
+					mainScupperActuatorWeight = mainScupperActuatorWeight - .03;
+					delay(200);
+				}
+			}
+		}
+		break;
+	case 3:
+		lcd.setCursor(0, 0);
+		lcd.print("SetLowTrckActWgt");
+		lcd.setCursor(0, 1);
+		lcd.print("                ");
+		//lcdButtonRead();
+		if (read_LCD_buttons() == btnSELECT) {
+			while (read_LCD_buttons() != btnLEFT) {
+				lcd.setCursor(0, 0);
+				lcd.print("Up+Dn-TrklActWgt");
+				lcd.setCursor(0, 1);
+				lcd.print(lowestTrickleIntensityWeight);
+				if (read_LCD_buttons() == btnUP) {
+					lowestTrickleIntensityWeight = lowestTrickleIntensityWeight + .03;
+					delay(200);
+				}
+				if (read_LCD_buttons() == btnDOWN) {
+					lowestTrickleIntensityWeight = lowestTrickleIntensityWeight - .03;
+					delay(200);
+				}
+			}
+		}
+		break;
+	case 4:
+		lcd.setCursor(0, 0);
+		lcd.print("TempCalibFactor ");
+		lcd.setCursor(0, 1);
+		lcd.print("SetAprox 43395.5");
+		delay(2000);
+		lcd.clear();
+		lcd.setCursor(0, 0);
+		lcd.print("1.Dump/Tare 1st");
+		lcd.setCursor(0, 1);
+		lcd.print("ThenAddCalibWgts");
+		delay(2500);
+		lcd.clear();
+		lcd.setCursor(0, 0);
+		lcd.print("2.AdjCaliFactTil");
+		lcd.setCursor(0, 1);
+		lcd.print("WeightIsCorrect ");
+		delay(2500);
+		//lcdButtonRead();
+		if (read_LCD_buttons() == btnSELECT) {
+			menuScreenNum = 5;
+		}
+		break;
+	case 5:
+		lcd.setCursor(0, 0);
+		lcd.print(scale.get_units());
+		lcd.setCursor(0, 1);
+		lcd.print(calibration_factor);
+		while (read_LCD_buttons() != btnLEFT) {
+			lcd.setCursor(0, 0);
+			lcd.print(scale.get_units());
+			lcd.setCursor(0, 1);
+			lcd.print(calibration_factor);
+			scale.set_scale(calibration_factor);
+
+			if (read_LCD_buttons() == btnUP) {
+				calibration_factor = calibration_factor + 50;
+				delay(200);
+			}
+			if (read_LCD_buttons() == btnDOWN) {
+				calibration_factor = calibration_factor - 50;
+				delay(200);
+			}
+
+		}
+		menuScreenNum = 0;
+		break;
+	case 6:
+		int ldrReading = analogRead(LDR);
+		lcd.setCursor(0, 0);
+		lcd.print("CurrentLevel=");
+		lcd.setCursor(13, 0);
+		lcd.print(ldrReading);
+		lcd.setCursor(0, 1);
+		lcd.print("                ");
+		//lcdButtonRead();
+		if (read_LCD_buttons() == btnSELECT) {
+			while (read_LCD_buttons() != btnLEFT) {
+				lcd.setCursor(0, 0);
+				lcd.print("Up+Dn-LightSens");
+				lcd.setCursor(0, 1);
+				lcd.print(LDRThreshold);
+				if (read_LCD_buttons() == btnUP) {
+					LDRThreshold = LDRThreshold + 1;
+					delay(200);
+				}
+				if (read_LCD_buttons() == btnDOWN) {
+					LDRThreshold = LDRThreshold - 1;
+					delay(200);
+				}
+			}
+		}
+		break;
+	}
+}
+void navMenu() {
+	controlLCDButtonRead();
+}
+void controlEntryScreen() {
+	switch (entryScreenNum)
+	{
+
+	case 1:
+		lcd.setCursor(0, 0);
+		lcd.print("ChgDumpWeight");
+
+
+		break;
+	case 2:
+		lcd.setCursor(0, 0);
+		lcd.print("ChgTrickleThresh");
+
+		break;
+	case 3:
+		lcd.setCursor(0, 0);
+		lcd.print("ChgVibeHalfInten");
+
+		break;
+	case 4:
+		lcd.setCursor(0, 0);
+		lcd.print("ChgVibTrickInten");
+
+		break;
+	case 5:
+		lcd.setCursor(0, 0);
+		lcd.print("ChgTempAdjustCal");
+
+		break;
+
+	case 6:
+		lcd.setCursor(0, 0);
+		lcd.print("ChgLightSens");
+		break;
+	}
+}
+void controlStateMachine() {  //     ADD SWITCH CASE FOR CONTROLS HERE!!!! NEXT  ALSO... CONTROL will KILL ALL VIBES BUT NOT CHANGE scuppers
+	PORTC = PORTC & B00011111; // this shuts off motion for control operations
+	//updateControlDisplay();    this was commented out
+	controlMenu();
+	controlLCDButtonRead();
+}
+
+
+void updateControlDisplay() {
+	//lcd printing weight top left
+	lcd.setCursor(0, 0);
+	lcd.print("ControlState");
+	lcd.setCursor(0, 1);
+	lcd.print("DownToTempAdjust");
+}
+
+void updateRunDisplay() {
+	//lcd printing weight top left
+	lcd.setCursor(0, 0);
+	lcd.print("wt=");
+	lcd.print(scale.get_units(), 2);
+	//lcd printing Function top right
+	lcd.setCursor(8, 0);
+	lcd.print("RunState");
+
+	lcd.setCursor(0, 1);
+	lcd.print("CurState=");
+	lcd.setCursor(11, 1);
+	lcd.print(runState);
+}
+//LCDButtonRead is NEEDED FOR INPUT THIS IS WHAT YOU SHOULD SET INPUT FLAGS FROM
+void lcdButtonRead()
+{
+	lcd.setCursor(0, 0);
+	lcd.print((adc_key_in) / 100);
+
+	lcd.setCursor(9, 1);            // move cursor to second line "1" and 9 spaces over
+	lcd.print(millis() / 1000);      // display seconds elapsed since power-up
+
+
+	lcd.setCursor(0, 1);            // move to the begining of the second line
+	lcd_key = read_LCD_buttons();  // read the buttons
+
+	switch (lcd_key)               // depending on which button was pushed, we perform an action
+	{
+	case btnRIGHT:
+	{
+		lcd.print("RIGHT ");
+		break;
+	}
+	case btnLEFT:
+	{
+		// if You need the word "LEFT " shown on the display than use lcd.print("LEFT  ") instead of      lcd.print(adc_key_in) and lcd.print(" v");
+		// the following 2 lines will print the actual threshold voltage present at analog input 0 ; As these buttons are part of a voltage divider, pressing each button creates a different threshold voltage 
+
+		lcd.print("LEFT "); // shows the actual threshold voltage at analog input 0
+
+		break;
+	}
+	case btnUP:
+	{
+		lcd.print("UP   ");
+		//RUNMODESTATE
+		break;
+	}
+	case btnDOWN:
+	{
+		lcd.print("DOWN  ");
+		break;
+	}
+	case btnSELECT:
+	{
+		lcd.print("SELECT");
+		//calibrate();
+		break;
+	}
+	case btnNONE:
+	{
+		break;
+	}
+	}
+
+}
+void controlLCDButtonRead()
+{
+	/*lcd.setCursor(0, 0);
+	lcd.print((adc_key_in) / 100);
+
+	lcd.setCursor(9, 1);            // move cursor to second line "1" and 9 spaces over
+	lcd.print(millis() / 1000);      // display seconds elapsed since power-up
+
+
+	lcd.setCursor(0, 1);            // move to the begining of the second line
+	*/
+	lcd_key = read_LCD_buttons();  // read the buttons
+
+	switch (lcd_key)               // depending on which button was pushed, we perform an action
+	{
+	case btnRIGHT:    //Enter screen Num
+	{
+
+		break;
+	}
+	case btnLEFT:
+	{
+		// if You need the word "LEFT " shown on the display than use lcd.print("LEFT  ") instead of      lcd.print(adc_key_in) and lcd.print(" v");
+		// the following 2 lines will print the actual threshold voltage present at analog input 0 ; As these buttons are part of a voltage divider, pressing each button creates a different threshold voltage 
+
+		lcd.print("LEFT "); // shows the actual threshold voltage at analog input 0
+
+		break;
+	}
+	case btnUP:
+	{	if (menuScreenNum == 6) {
+		menuScreenNum = 0;
+	}
+	menuScreenNum = menuScreenNum + 1;
+	delay(350);
+	//RUNMODESTATE
+	break;
+	}
+	case btnDOWN:
+	{
+		if (menuScreenNum == 0) {
+			menuScreenNum = 6;
+			delay(350);
+			break;
+		}
+		menuScreenNum = menuScreenNum - 1;
+		delay(350);
+		break;
+	}
+	case btnSELECT:
+	{
+		lcd.print("SELECT");
+		entryScreenNum = menuScreenNum;
+		controlEntryScreen();
+		break;
+	}
+	case btnNONE:
+	{
+		break;
+	}
+	}
+
+}
+void determineState() {
+	while (PINA <= 128) {
+		controlStateMachine();
+	}
+	if (runState >= 3) {
+		return;
+	}
+	if (scale.get_units() >= dumpWeight) {  //STOP ALL BOX CHECK
+		runState = 3;
+		runStateMachine();
+		return;
+	}
+	if (scale.get_units() >= lowestTrickleIntensityWeight) {   //TRICKLING
+		runState = 2;
+		runStateMachine();
+		return;
+	}
+	if (scale.get_units() >= lowVibeOffWeight) {   //TOPPING STOPPING
+		runState = 1;
+		runStateMachine();
+		return;
+	}
+	if (scale.get_units() <= mainScupperActuatorWeight) //    //FAST FILLING
+		runState = 0;
+	runStateMachine();
+	return;
+}
+
+
+
+
+//return;
+void runStateMachine() {
+
+	/*
+	#define FAST_FILL 0
+	#define TOPPING_STOPPING 1
+	#define TRICKLING 2
+	#define CHECK_FOR_BOX 3
+	#define DUMP_CYCLE 4
+*/
+
+//lcdButtonRead(); this will only be used in control mode
+//determineState();
+	switch (runState) {
+		//determineState();
+		double curWeight = scale.get_units();
+		double dynamicVibeIntensity = (((vibeTaperEndWeight - curWeight) / taperRange)+0.5);
+	case FAST_FILL:				//0
+		//determineState();
+		//if (scale.get_units() <= 0.00) {             //THIS IS BRAND NEW CODE IN HEAT TREAT TWEAK
+			//scale.tare();
+			//delay(250);
+		//}
+		PORTC = 224;
+		analogWrite(vib1PinPWM, maxVibe1Intensity);
+		analogWrite(tricklePinPWM, maxTrickleIntensity);
+		break;
+
+	case TOPPING_STOPPING:		//1    main scupper closes
+		//determineState();
+		
+		PORTC = 240;
+		analogWrite(vib1PinPWM, dynamicVibeIntensity);
+		analogWrite(tricklePinPWM, dynamicVibeIntensity);
+		break;
+
+	case TRICKLING:				//2
+		//determineState();
+		lcd.setCursor(11, 1);
+		lcd.print("Trickle");
+		PORTC = 208;
+		analogWrite(vib1PinPWM, (maxVibe1Intensity*.7));
+		analogWrite(tricklePinPWM, dynamicVibeIntensity);  //      signal to reduce vibration amplitude from output pin
+		hallEffectFlag = 1;
+		break;
+
+	case CHECK_FOR_BOX:			//3
+		PORTC = 152; // magbelt, mainScupper, trickleScupper
+		lcd.setCursor(11, 1);
+		lcd.print("ChkBox");
+		analogWrite(vib1PinPWM, (0));
+		analogWrite(tricklePinPWM, (0));
+		//while (analogRead(LDR) >= 970) {
+		//lcd.clear();
+		//lcd.print("Waiting for Box");
+		//runState = 3;
+		//break;
+
+		ldrBoxCheck();
+		break;
+		/*
+		if (boxCheckFlag == 1){
+
+			runState = 4;
+			dumpCycleStart = millis();
+			break;
+
+
+		}
+		else {
+			Serial.println("waiting for box");
+			ldrBoxCheck();
+			break;
+		}
+		*/
+	case ALL_DUMP_ON:			//4
+
+		Serial.println("ALL DUMP ON REACHED   4");
+		lcd.setCursor(11, 1);
+		lcd.print("Dumping");
+		//if (PORTC == 152) {      // used to be  portC != 156
+			//PORTC = 158; //actuator, mag and Dump vibe all on
+		//}
+		PORTC = 158;
+		dumpActuatorDelay();
+		//if (dumpActuatorDelayFlag == 1) {
+			//runState = 5;
+			//break;
+		//}
+		break;
+
+	case CLOSE_DUMP_FLAP: //5
+
+		Serial.println("CLOSING DUMP FLAP   5");
+		if (PINC == 158 && currentMillis - dumpCycleStart >= dumpMagVibeDelayTime) {
+			PORTC = 156;
+			break;                //break and wait for the mag to end
+		}
+		//if prox shows closed runState++
+		dumpMagVibeDelay();
+		//setHallEffectFlag();
+		//setHallEffectFlag();
+		//if (dumpMagVibeDelayFlag == 0) {
+			//dumpMagVibeDelay();
+			//break;
+		//}
+		runState = 6;
+		//while (scale.get_units() >= 1.00) {}      // commenting this out on 11/1/2019
+		Serial.print("the hallEffectFlag is set to");
+		Serial.println(hallEffectFlag);
+		break;
+	case STOP_ALL_DUMP: //6
+		PORTC = 152;
+		if (hallEffectFlag == 0) {
+			runState = 7;
+			return;
+		}
+		else {
+			lcd.setCursor(0, 1);
+			lcd.print("MAGFAULT MAGFAULT");
+			PORTC = 0;
+			runState = 8;
+			break;
+		}
+
+	case RESET_FLAGS: //7
+		boxCheckFlag = 0;
+		dumpActuatorDelayFlag = 0;
+		dumpMagVibeDelayFlag = 0;
+		hallEffectFlag = 0;
+		runState = 0;
+		delay(25);
+		break;
+	case 8:
+		Serial.println("MAGFAULT MAGFAULT MAGFAULT MAGFAULT");
+		lcd.setCursor(0, 0);
+		lcd.print(" SERVICE NEEDED ");
+		lcd.setCursor(0, 1);
+		lcd.print("  Magnet Fault  ");
+		delay(2000);
+		lcd.clear();
+		delay(1000);
+		runState = 8;
+		break;
+	case 9:
+		int prePausePortC = PINC;
+		while (PINA == 191) {
+			PORTC = 0;
+			lcd.setCursor(0, 0);
+			lcd.print("   PAUSE MODE   ");
+			lcd.setCursor(0, 1);
+			lcd.print("TurnSwitchToRun ");
+			delay(2000);
+			lcd.clear();
+			delay(1000);
+		}
+		PORTC = prePausePortC;
+		runState = prePauseState;
+		//break;
+		return;
+		//Serial.println(scale.get_units(), 2);
+	}
+}
+
+///*
+void loop() {
+	//scale.set_scale(calibration_factor);
+	//boxCheck2 = analogRead(LDR);
+	//Serial.println(PORTC);
+	//Serial.println(hallEffectFlag);
+	if (PINA == 191 && runState <= 3) {
+		prePauseState = runState;
+		delay(20);
+		runState = 9;
+		return;
+	}
+	determineState();
+	updateRunDisplay();
+	runStateMachine();
+	//return;
+}
+//*/
+/*
+void loop() {
+
+	calibrate();
+	{
+
+		scale.set_scale(calibration_factor); //Adjust to this calibration factor
+
+		Serial.print("Reading: ");
+		Serial.print(scale.get_units(), 2);
+		Serial.print(" lbs"); //Change this to kg and re-adjust the calibration factor if you follow SI units like a sane person
+		Serial.print(" calibration_factor: ");
+		Serial.print(calibration_factor);
+		Serial.println();
+
+		if (Serial.available())
+		{
+			char temp = Serial.read();
+			if (temp == 't') {
+				delay(15);
+				Serial.println("RESETTING SCALE TO ZERO. RESETTING SCALE TO ZERO RESETTING SCALE TO ZERO");
+				scale.tare();
+			}
+			if (temp == '+' || temp == 'a')
+				calibration_factor += 10;
+			else if (temp == '-' || temp == 'z')
+				calibration_factor -= 10;
+
+		}
+	}
+}
+*/
