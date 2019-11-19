@@ -66,13 +66,14 @@ int runState = 0;
 unsigned long dumpCycleStart = 0;
 unsigned long currentMillis = 0;
 
+
 int dumpActuatorDelayTime = 2000;
 int dumpMagVibeDelayTime = 3000;
 int menuScreenNum = 0;
 int entryScreenNum = 0;
 double dumpWeight = 50.03;
 double mainScupperActuatorWeight = 47.75;
-double lowestTrickleIntensityWeight = 49;
+double lowestTrickleIntensityWeight = 48.5;
 double lowVibeOffWeight = 48;
 double vibeTaperStartWeight = 46.2;
 double vibeTaperEndWeight = 49.2;
@@ -208,8 +209,8 @@ void setup()
 	// LCD SETUP for LIQUIDCRYSTAL DISPLAY
 	lcd.begin(16, 2);              // start the library
 	lcd.setCursor(0, 0);
-	lcd.print("Velleman VMA203"); // print a simple message
-	delay(400);
+	lcd.print(" NewVers11-19-19"); // print a simple message
+	delay(2500);
 	lcd.clear();
 
 	lcd.setCursor(0, 0);
@@ -360,9 +361,9 @@ void controlMenu() {
 	{
 	case 0:
 		lcd.setCursor(0, 0);
-		lcd.print("ChooseMenuUpDown");
+		lcd.print("ToggleIsDown");
 		lcd.setCursor(0, 1);
-		lcd.print("Press Up or Down");
+		lcd.print("UpOrDown ForMenu");
 		break;
 	case 1:
 		lcd.setCursor(0, 0);
@@ -768,7 +769,7 @@ void runStateMachine() {
 		lcd.setCursor(11, 1);
 		lcd.print("Trickle");
 		PORTC = 208;
-		analogWrite(vib1PinPWM, (maxVibe1Intensity*.7));
+		analogWrite(vib1PinPWM, (maxVibe1Intensity*.65));   //  was *.75
 		analogWrite(tricklePinPWM, dynamicVibeIntensity);  //      signal to reduce vibration amplitude from output pin
 		hallEffectFlag = 1;
 		break;
