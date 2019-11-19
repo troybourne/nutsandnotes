@@ -70,18 +70,18 @@ int dumpActuatorDelayTime = 2000;
 int dumpMagVibeDelayTime = 3000;
 int menuScreenNum = 0;
 int entryScreenNum = 0;
-double dumpWeight = 50;
-double mainScupperActuatorWeight = 48;
+double dumpWeight = 50.03;
+double mainScupperActuatorWeight = 47.75;
 double lowestTrickleIntensityWeight = 49;
 double lowVibeOffWeight = 48;
-double vibeTaperStartWeight = 46.5;
-double vibeTaperEndWeight = 49.5;
+double vibeTaperStartWeight = 46.2;
+double vibeTaperEndWeight = 49.2;
 double taperRange = (vibeTaperEndWeight - vibeTaperStartWeight);
 
 int tricklePinPWM = 45;
 int vib1PinPWM = 44;
 int maxVibe1Intensity = 235;
-int maxTrickleIntensity = 230;
+int maxTrickleIntensity = 238;
 int firstDropOffPercentage[10] = { 40,45,50,55,60,65,70,75,80,85 };
 int trickleDropOffPercentage[10] = { 2,4,6,8,10,12,14,16,18,20 };
 double setFirstDropOffPercentage = (firstDropOffPercentage[2] / 100); //this holds the first drop off percentage variable 
@@ -740,7 +740,7 @@ void runStateMachine() {
 //lcdButtonRead(); this will only be used in control mode
 //determineState();
 	double curWeight = scale.get_units();
-	double dynamicVibeIntensity = (((vibeTaperEndWeight - curWeight) / taperRange) + 0.5);
+	double dynamicVibeIntensity = (((vibeTaperEndWeight - curWeight) / taperRange) + 0.57);
 	switch (runState) {
 		//determineState();
 
