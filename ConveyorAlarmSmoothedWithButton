@@ -1,4 +1,6 @@
 /*
+ * USE THIS ONE FOR HEAT TREATING... 1-9-2020 added a 5 second delay after a fault trigger... and upped the overload to 220
+ * 
   Smoothing
 
   Reads repeatedly from an analog input, calculating a running average and
@@ -34,7 +36,7 @@ int total = 0;                  // the running total
 int average = 0;                // the average
 const int relayPin = 7;
 const int sensorThreshold = 0;
-const int overLoad = 200;
+const int overLoad = 220;
 const int alarmPauseButton = 6;
 int inputPin = A0;
 
@@ -47,6 +49,8 @@ void setup() {
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {
     readings[thisReading] = 0;
   }
+  Serial.println("new3");
+  delay(2000);
 }
 
 void loop() {
@@ -85,9 +89,12 @@ switch(buttonPress){
   if(average > sensorThreshold && average < overLoad) {
     digitalWrite(relayPin, LOW);
     Serial.println("case 1");
+    break;
   } else {
     digitalWrite(relayPin, HIGH);
-    Serial.println("case 1 no power");
+    Serial.println("case 1 no power NEW");
+    delay(5000);
+    break;
 
   // wait 2 milliseconds before the next loop for the analog-to-digital
   // converter to settle after the last reading:
